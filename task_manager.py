@@ -26,9 +26,14 @@ class Task:
         return self._result
 
 
+class ProcessActive(Exception):
+    pass
+
+
 class TaskManager:
 
     def __init__(self):
+        self.process_active = False
         self.task_iterator = None
         self.next_task = None
         self.return_queue = None
@@ -41,9 +46,14 @@ class TaskManager:
         self.results_available = threading.Condition(self.mutex)
 
     def process(self, task_iterable):
+        with self.mutex:
+            if self.process_active:
+                raise ProcessActive
+            self.process_active = True
+
         self.task_iterator = iter(task_iterable)
         try:
-            self.next_task = next(task_iterable)
+            self.next_task = next(task_iterator)
         except StopIteration:
             self.task_iterator = None
             return
@@ -70,14 +80,18 @@ class TaskManager:
         self.result_queue = None
         self.cancelled = False
 
+        with self.mutex:
+            self.process_active = False
+
     def cancel_process(self):
         with self.mutex:
-            self.unfinished_tasks -= len(self.return_queue)
-            self.return_queue.clear()
-            if self.next_task is not None:
-                self.next_task = None
-                self.unfinished_tasks -= 1
-            self.cancelled = True
+            if self.process_active:
+                self.unfinished_tasks -= len(self.return_queue)
+                self.return_queue.clear()
+                if self.next_task is not None:
+                    self.next_task = None
+                    self.unfinished_tasks -= 1
+                self.cancelled = True
 
     def _get_next_task(self):
         with self.mutex:
@@ -115,5 +129,4 @@ class TaskManager:
                     self.return_queue.append(task)
                     self.unfinished_tasks += 1
                     self.tasks_available.notify()
-                print(self.unfinished_tasks)
 
