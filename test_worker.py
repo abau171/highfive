@@ -1,4 +1,4 @@
 import worker
 
-worker.run_workers("", 48484, 1)
+worker.run_workers("", 48484, 2)
 

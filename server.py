@@ -19,13 +19,16 @@ class WorkerRegistrar:
 
 class WorkerConnectionThread(threading.Thread):
 
-    def __init__(self, client_socket, registrar):
+    def __init__(self, client_socket, registrar, task_mgr):
         super().__init__()
         self.client_socket = client_socket
         self.registrar = registrar
+        self.task_mgr = task_mgr
 
     def main(self):
-        print("k")
+        while True:
+            with self.task_mgr.handle_task() as task:
+                task.run(self.client_socket)
 
     def run(self):
         self.registrar.register(self)
@@ -37,11 +40,12 @@ class WorkerConnectionThread(threading.Thread):
 
 class ServerThread(threading.Thread):
 
-    def __init__(self, hostname, port):
+    def __init__(self, hostname, port, task_mgr):
         super().__init__()
         self.hostname = hostname
         self.port = port
         self.registrar = WorkerRegistrar()
+        self.task_mgr = task_mgr
 
     def run(self):
         with socket.socket() as server_socket:
@@ -50,5 +54,5 @@ class ServerThread(threading.Thread):
             server_socket.listen(5)
             while True:
                 client_socket, address = server_socket.accept()
-                WorkerConnectionThread(client_socket, self.registrar).start()
+                WorkerConnectionThread(client_socket, self.registrar, self.task_mgr).start()
 

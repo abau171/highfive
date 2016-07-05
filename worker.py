@@ -10,11 +10,13 @@ class WorkerProcess(multiprocessing.Process):
         self.port = port
 
     def main(self):
-        print("k")
+        read_file = self.client_socket.makefile("r")
+        while True:
+            print(read_file.readline().rstrip("\n"))
 
     def run(self):
-        with socket.socket() as client_socket:
-            client_socket.connect((self.hostname, self.port))
+        with socket.socket() as self.client_socket:
+            self.client_socket.connect((self.hostname, self.port))
             self.main()
 
 
