@@ -1,7 +1,6 @@
-import queue
+import threading
+import collections
 import contextlib
-
-import iter_queue
 
 
 NO_RESULT = object()
@@ -27,33 +26,73 @@ class Task:
         return self._result
 
 
-def all_in_queue(queue):
-    while queue.qsize() > 0:
-        yield queue.get()
-
-
 class TaskManager:
 
     def __init__(self):
-        self.task_queue = iter_queue.IterableQueue()
-        self.result_queue = queue.Queue()
+        self.task_iterator = None
+        self.next_task = None
+        self.return_queue = None
+        self.result_queue = None
+        self.unfinished_tasks = None
+
+        self.mutex = threading.Lock()
+        self.tasks_available = threading.Condition(self.mutex)
+        self.results_available = threading.Condition(self.mutex)
 
     def process(self, task_iterable):
-        self.task_queue.put_iterable(task_iterable)
-        self.task_queue.join()
-        results = list(all_in_queue(self.result_queue))
-        return results
+        self.task_iterator = iter(task_iterable)
+        try:
+            self.next_task = next(task_iterable)
+        except StopIteration:
+            self.task_iterator = None
+            return
+        self.return_queue = collections.deque()
+        self.result_queue = collections.deque()
+        self.unfinished_tasks = 1
+
+        with self.mutex:
+            self.tasks_available.notify()
+
+        while True:
+            with self.mutex:
+                if len(self.result_queue) == 0 and self.unfinished_tasks == 0:
+                    break
+                while len(self.result_queue) == 0:
+                    self.results_available.wait()
+                result = self.result_queue.pop()
+            if result is not NO_RESULT:
+                yield result
+
+    def _get_next_task(self):
+        with self.mutex:
+            while self.next_task is None and len(self.return_queue) == 0:
+                self.tasks_available.wait()
+
+            if len(self.return_queue) > 0:
+                task = self.return_queue.pop()
+            else:
+                task = self.next_task
+                try:
+                    self.next_task = next(self.task_iterator)
+                    self.unfinished_tasks += 1
+                    self.tasks_available.notify()
+                except StopIteration:
+                    self.next_task = None
+
+            return task
 
     @contextlib.contextmanager
     def handle_task(self):
-        task = self.task_queue.get()
+        task = self._get_next_task()
         try:
             yield task
         finally:
-            if task.is_done():
-                if task.get_result() is not NO_RESULT:
-                    self.result_queue.put(task.get_result())
-            else:
-                self.task_queue.put(task)
-            self.task_queue.task_done()
+            with self.mutex:
+                if task.is_done():
+                    self.result_queue.append(task.get_result())
+                    self.results_available.notify()
+                    self.unfinished_tasks -= 1
+                else:
+                    self.return_queue.append(task)
+                    self.tasks_available.notify()
 

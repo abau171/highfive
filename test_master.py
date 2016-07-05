@@ -21,16 +21,18 @@ class LineTask(task_manager.Task):
         write_file.write("task {}\n".format(self.i))
         write_file.flush()
         read_file.readline()
-        self.done()
+        self.done("RESULT {}".format(self.i))
 
 
 try:
 
     m = master.Master("", 48484)
 
-    m.process(LineTask(i) for i in range(10))
+    for result in m.process(LineTask(i) for i in range(10)):
+        print(result)
     print("DONE 1")
-    m.process(LineTask(i) for i in range(10, 20))
+    for result in m.process(LineTask(i) for i in range(10, 20)):
+        print(result)
     print("DONE 2")
 
 except KeyboardInterrupt:

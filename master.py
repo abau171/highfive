@@ -10,5 +10,5 @@ class Master:
         self.server.start()
 
     def process(self, task_iterable):
-        self.task_mgr.process(task_iterable)
+        return self.task_mgr.process(task_iterable)
 
