@@ -15,5 +15,8 @@ class LineWorker(worker.Worker):
             write_file.flush()
 
 
-worker.run_workers("", 48484, LineWorker())
+try:
+    worker.run_workers("", 48484, LineWorker())
+except KeyboardInterrupt:
+    print("cancelled")
 

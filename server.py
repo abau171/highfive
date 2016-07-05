@@ -1,5 +1,6 @@
 import socket
 import threading
+import contextlib
 
 
 class WorkerRegistrar:
@@ -8,40 +9,42 @@ class WorkerRegistrar:
         self.worker_conns = set()
         self.mutex = threading.Lock()
 
-    def register(self, worker_conn):
+    @contextlib.contextmanager
+    def registered(self, worker_conn):
         with self.mutex:
             self.worker_conns.add(worker_conn)
-
-    def unregister(self, worker_conn):
-        with self.mutex:
-            self.worker_conns.remove(worker_conn)
+        try:
+            yield
+        finally:
+            with self.mutex:
+                self.worker_conns.remove(worker_conn)
 
 
 class WorkerConnectionThread(threading.Thread):
 
     def __init__(self, client_socket, registrar, task_mgr):
-        super().__init__()
+        super().__init__(daemon=True)
         self.client_socket = client_socket
         self.registrar = registrar
         self.task_mgr = task_mgr
 
-    def main(self):
-        while True:
-            with self.task_mgr.handle_task() as task:
-                task.run(self.client_socket)
+    def handle_tasks(self):
+        try:
+            while True:
+                with self.task_mgr.handle_task() as task:
+                    task.run(self.client_socket)
+        except OSError:
+            pass
 
     def run(self):
-        self.registrar.register(self)
-        try:
-            self.main()
-        finally:
-            self.registrar.unregister(self)
+        with self.registrar.registered(self):
+            self.handle_tasks()
 
 
 class ServerThread(threading.Thread):
 
     def __init__(self, hostname, port, task_mgr):
-        super().__init__()
+        super().__init__(daemon=True)
         self.hostname = hostname
         self.port = port
         self.registrar = WorkerRegistrar()

@@ -16,10 +16,21 @@ class WorkerProcess(multiprocessing.Process):
         self.port = port
         self.worker = worker
 
-    def run(self):
+    def handle_work(self):
         with socket.socket() as client_socket:
-            client_socket.connect((self.hostname, self.port))
-            self.worker.run(client_socket)
+            try:
+                client_socket.connect((self.hostname, self.port))
+                self.worker.run(client_socket)
+            except ConnectionRefusedError:
+                print("could not connect to server.")
+            except OSError:
+                pass
+
+    def run(self):
+        try:
+            self.handle_work()
+        except KeyboardInterrupt:
+            pass
 
 
 def run_workers(hostname, port, worker, count=0):

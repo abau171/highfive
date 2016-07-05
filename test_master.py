@@ -24,11 +24,16 @@ class LineTask(task_manager.Task):
         self.done()
 
 
-m = master.Master("", 48484)
+try:
 
+    m = master.Master("", 48484)
 
-m.process(LineTask(i) for i in range(10))
-print("DONE 1")
-m.process(LineTask(i) for i in range(10, 20))
-print("DONE 2")
+    m.process(LineTask(i) for i in range(10))
+    print("DONE 1")
+    m.process(LineTask(i) for i in range(10, 20))
+    print("DONE 2")
+
+except KeyboardInterrupt:
+
+    print("cancelled")
 
