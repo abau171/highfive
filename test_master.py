@@ -31,9 +31,14 @@ try:
     for result in m.process(LineTask(i) for i in range(10)):
         print(result)
     print("DONE 1")
-    for result in m.process(LineTask(i) for i in range(10, 20)):
+    for result in m.process(LineTask(i) for i in range(10, 2000)):
         print(result)
+        if result == "RESULT 20":
+            m.cancel_process()
     print("DONE 2")
+    for result in m.process(LineTask(i) for i in range(2000, 2010)):
+        print(result)
+    print("DONE 3")
 
 except KeyboardInterrupt:
 

@@ -12,3 +12,6 @@ class Master:
     def process(self, task_iterable):
         return self.task_mgr.process(task_iterable)
 
+    def cancel_process(self):
+        self.task_mgr.cancel_process()
+

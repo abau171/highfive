@@ -33,7 +33,8 @@ class TaskManager:
         self.next_task = None
         self.return_queue = None
         self.result_queue = None
-        self.unfinished_tasks = None
+        self.unfinished_tasks = 0
+        self.cancelled = False
 
         self.mutex = threading.Lock()
         self.tasks_available = threading.Condition(self.mutex)
@@ -49,6 +50,7 @@ class TaskManager:
         self.return_queue = collections.deque()
         self.result_queue = collections.deque()
         self.unfinished_tasks = 1
+        self.cancelled = False
 
         with self.mutex:
             self.tasks_available.notify()
@@ -63,6 +65,20 @@ class TaskManager:
             if result is not NO_RESULT:
                 yield result
 
+        self.task_iterator = None
+        self.return_queue = None
+        self.result_queue = None
+        self.cancelled = False
+
+    def cancel_process(self):
+        with self.mutex:
+            self.unfinished_tasks -= len(self.return_queue)
+            self.return_queue.clear()
+            if self.next_task is not None:
+                self.next_task = None
+                self.unfinished_tasks -= 1
+            self.cancelled = True
+
     def _get_next_task(self):
         with self.mutex:
             while self.next_task is None and len(self.return_queue) == 0:
@@ -72,12 +88,15 @@ class TaskManager:
                 task = self.return_queue.pop()
             else:
                 task = self.next_task
-                try:
-                    self.next_task = next(self.task_iterator)
-                    self.unfinished_tasks += 1
-                    self.tasks_available.notify()
-                except StopIteration:
+                if self.cancelled:
                     self.next_task = None
+                else:
+                    try:
+                        self.next_task = next(self.task_iterator)
+                        self.unfinished_tasks += 1
+                        self.tasks_available.notify()
+                    except StopIteration:
+                        self.next_task = None
 
             return task
 
@@ -88,11 +107,13 @@ class TaskManager:
             yield task
         finally:
             with self.mutex:
+                self.unfinished_tasks -= 1
                 if task.is_done():
                     self.result_queue.append(task.get_result())
                     self.results_available.notify()
-                    self.unfinished_tasks -= 1
-                else:
+                elif not self.cancelled:
                     self.return_queue.append(task)
+                    self.unfinished_tasks += 1
                     self.tasks_available.notify()
+                print(self.unfinished_tasks)
 
