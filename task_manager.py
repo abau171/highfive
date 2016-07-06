@@ -93,20 +93,22 @@ class TaskSet:
     def next_task(self):
         return self.task_queue.next()
 
-    def task_done(self):
+    def task_done(self, result):
         self.task_queue.task_done()
+        if not self.cancelled:
+            self.result_queue.append(result)
 
     def return_task(self, task):
-        self.task_queue.return_task(task)
+        if not self.cancelled:
+            self.task_queue.return_task(task)
+        else:
+            self.task_queue.task_done()
 
     def has_unfinished_tasks(self):
         return self.task_queue.has_unfinished_tasks()
 
     def has_results(self):
         return len(self.result_queue) > 0
-
-    def put_result(self, result):
-        self.result_queue.append(result)
 
     def pop_result(self):
         return self.result_queue.pop()
@@ -115,9 +117,6 @@ class TaskSet:
         self.task_queue.clear()
         self.result_queue.clear()
         self.cancelled = True
-
-    def is_cancelled(self):
-        return self.cancelled
 
     def is_done(self):
         return not self.has_results() and not self.has_unfinished_tasks()
@@ -148,10 +147,10 @@ class TaskManager:
         with self._activate(task_iterable):
             while True:
                 with self.mutex:
+                    while not (self.task_set.is_done() or self.task_set.has_results()):
+                        self.results_available.wait()
                     if self.task_set.is_done():
                         break
-                    while not self.task_set.has_results():
-                        self.results_available.wait()
                     result = self.task_set.pop_result()
                 if result is not NO_RESULT:
                     yield result
@@ -179,12 +178,10 @@ class TaskManager:
         finally:
             with self.mutex:
                 if task.is_done():
-                    self.task_set.task_done()
-                    self.task_set.put_result(task.get_result())
+                    self.task_set.task_done(task.get_result())
                     self.results_available.notify()
-                elif not self.task_set.is_cancelled():
+                else:
                     self.task_set.return_task(task)
                     self.tasks_available.notify()
-                else:
-                    self.task_set.task_done()
+                    self.results_available.notify() # if cancelled, the task is considered done which influences results
 
