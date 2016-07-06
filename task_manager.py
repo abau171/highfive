@@ -30,15 +30,62 @@ class ProcessActive(Exception):
     pass
 
 
+class Empty(Exception):
+    pass
+
+
+class TaskQueue:
+
+    def __init__(self, task_iterable):
+        self.task_iterator = iter(task_iterable)
+        try:
+            self.next_task = next(self.task_iterator)
+            self.unfinished_tasks = 1
+        except StopIteration:
+            self.next_task = None
+            self.unfinished_tasks = 0
+        self.return_queue = collections.deque()
+
+    def next(self):
+        if len(self.return_queue) > 0:
+            return self.return_queue.pop()
+        elif self.next_task is not None:
+            task = self.next_task
+            try:
+                self.next_task = next(self.task_iterator)
+                self.unfinished_tasks += 1
+            except StopIteration:
+                self.next_task = None
+            return task
+        else:
+            raise Empty
+
+    def has_next(self):
+        return len(self.return_queue) > 0 or self.next_task is not None
+
+    def clear(self):
+        if self.next_task is not None:
+            self.next_task = None
+            self.unfinished_tasks -= 1
+        self.unfinished_tasks -= len(self.return_queue)
+        self.return_queue.clear()
+
+    def task_done(self):
+        self.unfinished_tasks -= 1
+
+    def has_unfinished_tasks(self):
+        return self.unfinished_tasks > 0
+
+    def return_task(self, task):
+        self.return_queue.append(task)
+
+
 class TaskManager:
 
     def __init__(self):
         self.process_active = False
-        self.task_iterator = None
-        self.next_task = None
-        self.return_queue = None
+        self.task_queue = None
         self.result_queue = None
-        self.unfinished_tasks = 0
         self.cancelled = False
 
         self.mutex = threading.Lock()
@@ -46,72 +93,56 @@ class TaskManager:
         self.results_available = threading.Condition(self.mutex)
 
     def process(self, task_iterable):
-        with self.mutex:
-            if self.process_active:
-                raise ProcessActive
-            self.process_active = True
-
-        self.task_iterator = iter(task_iterable)
         try:
-            self.next_task = next(task_iterator)
-        except StopIteration:
-            self.task_iterator = None
-            return
-        self.return_queue = collections.deque()
-        self.result_queue = collections.deque()
-        self.unfinished_tasks = 1
-        self.cancelled = False
 
-        with self.mutex:
-            self.tasks_available.notify()
-
-        while True:
             with self.mutex:
-                if len(self.result_queue) == 0 and self.unfinished_tasks == 0:
-                    break
-                while len(self.result_queue) == 0:
-                    self.results_available.wait()
-                result = self.result_queue.pop()
-            if result is not NO_RESULT:
-                yield result
+                if self.process_active:
+                    raise ProcessActive
+                self.process_active = True
 
-        self.task_iterator = None
-        self.return_queue = None
-        self.result_queue = None
-        self.cancelled = False
+            self.task_queue = TaskQueue(task_iterable)
+            if not self.task_queue.has_next():
+                self.task_queue = None
+                return
+            self.result_queue = collections.deque()
+            self.cancelled = False
 
-        with self.mutex:
-            self.process_active = False
+            with self.mutex:
+                self.tasks_available.notify()
+
+            while True:
+                with self.mutex:
+                    if len(self.result_queue) == 0 and not self.task_queue.has_unfinished_tasks():
+                        break
+                    while len(self.result_queue) == 0:
+                        self.results_available.wait()
+                    result = self.result_queue.pop()
+                if result is not NO_RESULT:
+                    yield result
+
+        finally:
+
+            self.task_queue = None
+            self.result_queue = None
+            self.cancelled = False
+
+            with self.mutex:
+                self.process_active = False
 
     def cancel_process(self):
         with self.mutex:
             if self.process_active:
-                self.unfinished_tasks -= len(self.return_queue)
-                self.return_queue.clear()
-                if self.next_task is not None:
-                    self.next_task = None
-                    self.unfinished_tasks -= 1
+                self.task_queue.clear()
                 self.cancelled = True
 
     def _get_next_task(self):
         with self.mutex:
-            while self.next_task is None and len(self.return_queue) == 0:
+            while self.task_queue is None or not self.task_queue.has_next():
                 self.tasks_available.wait()
 
-            if len(self.return_queue) > 0:
-                task = self.return_queue.pop()
-            else:
-                task = self.next_task
-                if self.cancelled:
-                    self.next_task = None
-                else:
-                    try:
-                        self.next_task = next(self.task_iterator)
-                        self.unfinished_tasks += 1
-                        self.tasks_available.notify()
-                    except StopIteration:
-                        self.next_task = None
-
+            task = self.task_queue.next()
+            if self.task_queue.has_next():
+                self.tasks_available.notify()
             return task
 
     @contextlib.contextmanager
@@ -121,12 +152,13 @@ class TaskManager:
             yield task
         finally:
             with self.mutex:
-                self.unfinished_tasks -= 1
                 if task.is_done():
+                    self.task_queue.task_done()
                     self.result_queue.append(task.get_result())
                     self.results_available.notify()
                 elif not self.cancelled:
-                    self.return_queue.append(task)
-                    self.unfinished_tasks += 1
+                    self.task_queue.return_task(task)
                     self.tasks_available.notify()
+                else:
+                    self.task_queue.task_done()
 
