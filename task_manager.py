@@ -114,12 +114,47 @@ class TaskSet:
         return self.result_queue.pop()
 
     def cancel(self):
-        self.task_queue.clear()
-        self.result_queue.clear()
-        self.cancelled = True
+        if not self.cancelled:
+            self.task_queue.clear()
+            self.result_queue.clear()
+            self.cancelled = True
 
     def is_done(self):
         return not self.has_results() and not self.has_unfinished_tasks()
+
+
+class NoResult:
+    pass
+
+
+class DeadController:
+    pass
+
+
+class TaskSetController:
+
+    def __init__(self, result_iterator, cancel_function):
+        self._result_iterator = result_iterator
+        self._cancel_function = cancel_function
+        self._dead = False
+
+    def _kill(self):
+        self._dead = True
+
+    def results(self):
+        return self._result_iterator
+
+    def next_result(self):
+        try:
+            result = next(self._result_iterator)
+            return result
+        except StopIteration:
+            raise NoResult
+
+    def cancel(self):
+        if self._dead:
+            raise DeadController
+        self._cancel_function()
 
 
 class TaskManager:
@@ -130,35 +165,39 @@ class TaskManager:
         self.tasks_available = threading.Condition(self.mutex)
         self.results_available = threading.Condition(self.mutex)
 
+    def _task_set_results(self):
+        while True:
+            with self.mutex:
+                while not (self.task_set.is_done() or self.task_set.has_results()):
+                    self.results_available.wait()
+                if self.task_set.is_done():
+                    break
+                result = self.task_set.pop_result()
+            if result is not NO_RESULT:
+                yield result
+
+    def _cancel_task_set(self):
+        with self.mutex:
+            self.task_set.cancel()
+
     @contextlib.contextmanager
-    def _activate(self, task_iterable):
+    def run_task_set(self, task_iterable):
         with self.mutex:
             if self.task_set is not None:
                 raise TaskSetInProgress
             self.task_set = TaskSet(task_iterable)
             self.tasks_available.notify()
+        result_iterator = self._task_set_results()
+        controller = TaskSetController(result_iterator, self._cancel_task_set)
         try:
-            yield
+            yield controller
         finally:
+            controller._kill()
+            self._cancel_task_set()
+            for _ in result_iterator: # easy way of making sure all tasks are done
+                pass
             with self.mutex:
                 self.task_set = None
-
-    def process(self, task_iterable):
-        with self._activate(task_iterable):
-            while True:
-                with self.mutex:
-                    while not (self.task_set.is_done() or self.task_set.has_results()):
-                        self.results_available.wait()
-                    if self.task_set.is_done():
-                        break
-                    result = self.task_set.pop_result()
-                if result is not NO_RESULT:
-                    yield result
-
-    def cancel_process(self):
-        with self.mutex:
-            if self.task_set is not None:
-                self.task_set.cancel()
 
     def _get_next_task(self):
         with self.mutex:

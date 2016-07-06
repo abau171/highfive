@@ -9,9 +9,6 @@ class Master:
         self.server = server.ServerThread(host, port, self.task_mgr)
         self.server.start()
 
-    def process(self, task_iterable):
-        return self.task_mgr.process(task_iterable)
-
-    def cancel_process(self):
-        self.task_mgr.cancel_process()
+    def run_task_set(self, task_iterable):
+        return self.task_mgr.run_task_set(task_iterable)
 

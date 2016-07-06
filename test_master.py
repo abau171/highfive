@@ -28,17 +28,23 @@ try:
 
     m = master.Master("", 48484)
 
-    for result in m.process(LineTask(i) for i in range(10)):
-        print(result)
+    with m.run_task_set(LineTask(i) for i in range(10)) as task_set:
+        for result in task_set.results():
+            print(result)
     print("DONE 1")
-    for result in m.process(LineTask(i) for i in range(10, 2000)):
-        print(result)
-        if result == "RESULT 20":
-            m.cancel_process()
+    with m.run_task_set(LineTask(i) for i in range(10, 2000)) as task_set:
+        for result in task_set.results():
+            print(result)
+            if result == "RESULT 20":
+                task_set.cancel()
     print("DONE 2")
-    for result in m.process(LineTask(i) for i in range(2000, 2010)):
-        print(result)
+    with m.run_task_set(LineTask(i) for i in range(2000, 3000)) as task_set:
+        print(task_set.next_result())
     print("DONE 3")
+    with m.run_task_set(LineTask(i) for i in range(3000, 3010)) as task_set:
+        for result in task_set.results():
+            print(result)
+    print("DONE 4")
 
 except KeyboardInterrupt:
 
