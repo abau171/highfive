@@ -1,6 +1,6 @@
-import distributed_process
-import task_manager
-import server
+import highfive.distributed_process
+import highfive.task_manager
+import highfive.server
 
 
 class DistributedProcessUserView:
@@ -18,12 +18,12 @@ class DistributedProcessUserView:
 class Master:
 
     def __init__(self, host, port):
-        self._task_mgr = task_manager.TaskManager()
-        self._server = server.ServerThread(host, port, self._task_mgr)
+        self._task_mgr = highfive.task_manager.TaskManager()
+        self._server = highfive.server.ServerThread(host, port, self._task_mgr)
         self._server.start()
 
     def process(self, task_iterable):
-        p = distributed_process.DistributedProcess(task_iterable)
+        p = highfive.distributed_process.DistributedProcess(task_iterable)
         self._task_mgr.add_process(p)
         return DistributedProcessUserView(p)
 

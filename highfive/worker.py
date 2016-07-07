@@ -1,7 +1,7 @@
 import socket
 import multiprocessing
 
-import message_connection
+import highfive.message_connection
 
 
 class Worker:
@@ -24,10 +24,10 @@ class WorkerProcess(multiprocessing.Process):
                 client_socket.connect((self._hostname, self._port))
             except ConnectionRefusedError:
                 print("could not connect to server.")
-            connection = message_connection.MessageConnection(client_socket)
+            connection = highfive.message_connection.MessageConnection(client_socket)
             try:
                 self._worker.run(connection)
-            except message_connection.Closed:
+            except highfive.message_connection.Closed:
                 pass
         print("connection closed.")
 

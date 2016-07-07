@@ -1,9 +1,9 @@
 import time
 
-import worker
+import highfive
 
 
-class LineWorker(worker.Worker):
+class LineWorker(highfive.Worker):
 
     def run(self, connection):
         while True:
@@ -13,7 +13,7 @@ class LineWorker(worker.Worker):
 
 
 try:
-    worker.run_workers("", 48484, LineWorker())
+    highfive.run_workers("", 48484, LineWorker())
 except KeyboardInterrupt:
     print("cancelled")
 

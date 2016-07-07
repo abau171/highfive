@@ -2,7 +2,7 @@ import threading
 import collections
 import contextlib
 
-import distributed_process
+import highfive.distributed_process
 
 
 NO_RESULT = object()
@@ -53,7 +53,7 @@ class TaskManager:
                 process = self._process_queue[0]
                 try:
                     task = process.next_task()
-                except distributed_process.Closed:
+                except highfive.distributed_process.Closed:
                     self._process_queue.popleft()
             self._queue_update.notify()
         try:

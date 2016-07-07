@@ -1,11 +1,10 @@
 import time
 import random
 
-import master
-import task_manager
+import highfive
 
 
-class LineTask(task_manager.Task):
+class LineTask(highfive.Task):
 
     def __init__(self, i):
         super().__init__()
@@ -24,7 +23,7 @@ class LineTask(task_manager.Task):
 
 try:
 
-    m = master.Master("", 48484)
+    m = highfive.Master("", 48484)
 
     # normal process
     p1 =  m.process(LineTask(i) for i in range(10))

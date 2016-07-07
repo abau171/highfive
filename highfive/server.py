@@ -2,7 +2,7 @@ import socket
 import threading
 import contextlib
 
-import message_connection
+import highfive.message_connection
 
 
 class WorkerRegistrar:
@@ -27,7 +27,7 @@ class WorkerConnectionThread(threading.Thread):
     def __init__(self, client_socket, registrar, task_mgr):
         super().__init__(daemon=True)
         self._client_socket = client_socket
-        self._connection = message_connection.MessageConnection(self._client_socket)
+        self._connection = highfive.message_connection.MessageConnection(self._client_socket)
         self._registrar = registrar
         self._task_mgr = task_mgr
 
@@ -36,7 +36,7 @@ class WorkerConnectionThread(threading.Thread):
             while not self._connection.is_closed():
                 with self._task_mgr.task() as task:
                     task.run(self._connection)
-        except message_connection.Closed:
+        except highfive.message_connection.Closed:
             pass
         finally:
             self._client_socket.close()
