@@ -28,22 +28,34 @@ try:
 
     m = master.Master("", 48484)
 
-    with m.run_task_set(LineTask(i) for i in range(10)) as task_set:
-        for result in task_set.results():
-            print(result)
+    # normal process
+    p1 =  m.process(LineTask(i) for i in range(10))
+    for result in p1.results():
+        print(result)
     print("DONE 1")
-    with m.run_task_set(LineTask(i) for i in range(10, 2000)) as task_set:
-        for result in task_set.results():
-            print(result)
-            if result == "RESULT 20":
-                task_set.cancel()
+
+    # early close
+    p2 = m.process(LineTask(i) for i in range(10, 2000))
+    for result in p2.results():
+        print(result)
+        if result == "RESULT 20":
+            p2.close()
     print("DONE 2")
-    with m.run_task_set(LineTask(i) for i in range(2000, 3000)) as task_set:
-        print(task_set.next_result())
+
+    # first result close
+    p3 =  m.process(LineTask(i) for i in range(2000, 3000))
+    print(next(p3.results()))
+    p3.close()
     print("DONE 3")
-    with m.run_task_set(LineTask(i) for i in range(3000, 3010)) as task_set:
-        for result in task_set.results():
-            print(result)
+
+    # out-of-order results
+    p4 =  m.process(LineTask(i) for i in range(3000, 3010))
+    p5 =  m.process(LineTask(i) for i in range(3010, 3020))
+    for result in p5.results():
+        print(result)
+    print("DONE 5")
+    for result in p4.results():
+        print(result)
     print("DONE 4")
 
 except KeyboardInterrupt:

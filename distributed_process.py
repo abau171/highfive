@@ -22,13 +22,13 @@ class TaskQueue:
 
     def _load_next(self):
         try:
-            self.on_deck = next(self._task_iterator)
+            self._on_deck = next(self._task_iterator)
             self._open_tasks += 1
         except StopIteration:
-            self.on_deck = None
+            self._on_deck = None
 
     def _has_next(self):
-        return self.on_deck is not None or len(self._requeue) > 0
+        return self._on_deck is not None or len(self._requeue) > 0
 
     def next(self):
 
@@ -40,8 +40,8 @@ class TaskQueue:
         else: # must have the next task available
             if len(self._requeue) > 0:
                 task = self._requeue.popleft()
-            elif self.on_deck is not None:
-                task = self.on_deck
+            elif self._on_deck is not None:
+                task = self._on_deck
                 self._load_next()
             if self._has_next():
                 self._task_update.notify()
@@ -50,6 +50,7 @@ class TaskQueue:
     def push(self, task):
         if not self._closed:
             self._requeue.append(task)
+            self._task_update.notify()
 
     def _close_if_no_tasks(self):
         if self._open_tasks == 0:
@@ -113,7 +114,7 @@ class DistributedProcess:
 
         self._mutex = threading.Lock()
 
-        self._task_queue = TaskQueue(task_iterable)
+        self._task_queue = TaskQueue(self._mutex, task_iterable)
         self._results = ResultSet(self._mutex)
 
         self._end_results_if_task_queue_closed()

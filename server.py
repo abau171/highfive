@@ -31,7 +31,7 @@ class WorkerConnectionThread(threading.Thread):
     def handle_tasks(self):
         try:
             while True:
-                with self.task_mgr.handle_task() as task:
+                with self.task_mgr.task() as task:
                     task.run(self.client_socket)
         except OSError:
             pass
