@@ -12,15 +12,15 @@ class WorkerProcess(multiprocessing.Process):
 
     def __init__(self, hostname, port, worker):
         super().__init__()
-        self.hostname = hostname
-        self.port = port
-        self.worker = worker
+        self._hostname = hostname
+        self._port = port
+        self._worker = worker
 
     def handle_work(self):
         with socket.socket() as client_socket:
             try:
-                client_socket.connect((self.hostname, self.port))
-                self.worker.run(client_socket)
+                client_socket.connect((self._hostname, self._port))
+                self._worker.run(client_socket)
             except ConnectionRefusedError:
                 print("could not connect to server.")
             except OSError:
