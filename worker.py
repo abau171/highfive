@@ -1,6 +1,8 @@
 import socket
 import multiprocessing
 
+import message_connection
+
 
 class Worker:
 
@@ -20,11 +22,14 @@ class WorkerProcess(multiprocessing.Process):
         with socket.socket() as client_socket:
             try:
                 client_socket.connect((self._hostname, self._port))
-                self._worker.run(client_socket)
             except ConnectionRefusedError:
                 print("could not connect to server.")
-            except OSError:
+            connection = message_connection.MessageConnection(client_socket)
+            try:
+                self._worker.run(connection)
+            except message_connection.Closed:
                 pass
+        print("connection closed.")
 
     def run(self):
         try:

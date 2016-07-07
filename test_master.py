@@ -15,12 +15,10 @@ class LineTask(task_manager.Task):
         time.sleep(0.2)
         if random.randint(0, 1) == 0:
             print("simulated failure on task {}".format(self.i))
+            #raise Exception
             return
-        read_file = connection.makefile("r")
-        write_file = connection.makefile("w")
-        write_file.write("task {}\n".format(self.i))
-        write_file.flush()
-        read_file.readline()
+        connection.send("task {}".format(self.i))
+        connection.recv()
         self.done("RESULT {}".format(self.i))
 
 
