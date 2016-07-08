@@ -4,7 +4,7 @@ setup(
     name = "highfive",
     packages = ["highfive"],
     version = "0.0",
-    description = "Failure-tolerant, cooperative distributed processing framework.",
+    description = "Fault-tolerant, cooperative distributed processing framework.",
     author = "Andrew Bauer",
     author_email = "abau171@gmail.com",
     url = "https://github.com/abau171/highfive",
