@@ -5,11 +5,23 @@ import highfive.task_manager
 import highfive.server
 
 
+class LastResult(Exception):
+    """Exception raised when a process user view runs out of results."""
+    pass
+
+
 class DistributedProcessUserView:
     """View of a distributed process object which a user can manipulate."""
 
     def __init__(self, process):
         self._process = process
+        self._internal_results = process.results()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.close()
 
     def close(self):
         """Closes the distributed process."""
@@ -20,6 +32,14 @@ class DistributedProcessUserView:
         """Iterates over the results of the distributed process."""
 
         return self._process.results()
+
+    def next_result(self):
+        """Returns one result at a time from the distributed process."""
+
+        try:
+            return next(self._internal_results)
+        except StopIteration as e:
+            raise LastResult from e
 
 
 class Master:

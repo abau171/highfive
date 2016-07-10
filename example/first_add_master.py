@@ -20,7 +20,8 @@ if __name__ == "__main__":
 
     m = highfive.Master("", 48484)
 
-    p = m.process(AddTask(i, i + 1) for i in range(20))
-    for a, b, added in p.results():
-        print("{} + {} = {}".format(a, b, added))
+    with m.process(AddTask(i, i + 1) for i in range(20)) as p:
+        while True:
+            a, b, added = p.next_result()
+            print("{} + {} = {}".format(a, b, added))
 
