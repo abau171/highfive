@@ -7,9 +7,12 @@ with socket.socket() as s:
     sf = s.makefile("rw")
     while True:
         task = json.loads(sf.readline())
-        print(task)
+        a = task[0]
+        b = task[1]
+        print("calculation {} + {} ...".format(a, b))
         time.sleep(1)
-        sf.write(json.dumps(task + 1) + "\n")
+        c = a + b
+        print("result: {}".format(c))
+        sf.write(json.dumps(c) + "\n")
         sf.flush()
-        print("done")
 

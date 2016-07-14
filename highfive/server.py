@@ -5,6 +5,35 @@ import asyncio
 from . import task_set
 
 
+class Task:
+
+    def prepare(self):
+        raise NotImplementedError
+
+    def finish(self, result_struct):
+        return result_struct
+
+
+def encode_task(task):
+    if isinstance(task, Task):
+        task_struct = task.prepare()
+    else:
+        task_struct = task
+    task_json = json.dumps(task_struct) + "\n"
+    task_msg = task_json.encode("utf-8")
+    return task_msg
+
+
+def decode_result(task, result_msg):
+    result_json = result_msg.decode("utf-8")
+    result_struct = json.loads(result_json)
+    if isinstance(task, Task):
+        result = task.finish(result_struct)
+    else:
+        result = result_struct
+    return result
+
+
 class MasterServer:
 
     def __init__(self, loop):
@@ -20,10 +49,10 @@ class MasterServer:
             while not self._closing:
                 ts, task = await self._task_set_queue.next_task()
                 try:
-                    task_msg = json.dumps(task) + "\n"
-                    writer.write(task_msg.encode("utf-8"))
-                    result_msg = (await reader.readline()).decode("utf-8")
-                    result = json.loads(result_msg)
+                    task_msg = encode_task(task)
+                    writer.write(task_msg)
+                    result_msg = await reader.readline()
+                    result = decode_result(task, result_msg)
                     ts.task_done(result)
                 except:
                     ts.return_task(task)
