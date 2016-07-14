@@ -31,6 +31,8 @@ class Master:
 
     def stop(self):
         self._run_coro(self._server.stop())
+        self._thread.join()
+        self._loop.close()
 
     def run_task_set(self, ts):
         return self._run_coro(self._server.run_task_set(ts))

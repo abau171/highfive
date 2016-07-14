@@ -10,17 +10,26 @@ class TaskSetProcess:
 
     def __init__(self, ts):
         self._task_iterator = iter(ts)
+        self._active_tasks = 0
+
         self._load_next_task()
+
         self._returned_tasks = collections.deque()
         self._closed = False
-
         self._getters = collections.deque()
+
+        self._close_if_no_tasks()
 
     def _load_next_task(self):
         try:
             self._on_deck = next(self._task_iterator)
+            self._active_tasks += 1
         except StopIteration:
             self._on_deck = None
+
+    def _close_if_no_tasks(self):
+        if self._active_tasks == 0:
+            self.close()
 
     async def next_task(self):
         if self._closed:
@@ -32,9 +41,9 @@ class TaskSetProcess:
             self._load_next_task()
             return task
         else:
-            future = asyncio.Future()
-            self._getters.append(future)
-            return await future
+            getter = asyncio.Future()
+            self._getters.append(getter)
+            return await getter
 
     def return_task(self, task):
         if self._closed:
@@ -44,7 +53,11 @@ class TaskSetProcess:
         else:
             self._returned_tasks.append(task)
 
-    def cancel(self):
+    def task_done(self):
+        self._active_tasks -= 1
+        self._close_if_no_tasks()
+
+    def close(self):
         self._closed = True
         while len(self._getters) > 0:
             self._getters.pop().set_exception(TaskSetClosed())

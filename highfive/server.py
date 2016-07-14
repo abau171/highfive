@@ -11,7 +11,7 @@ class MasterServer:
         self._server = None
         self._closing = False
         self._clients = set()
-        self._waiter = asyncio.Future(loop=self._loop)
+        self._waiters = []
 
         self._cur_task_set = None
 
@@ -24,9 +24,10 @@ class MasterServer:
                     self._cur_task_set.return_task(task)
                     print("RETURNED", task)
                 else:
-                    print(task)
+                    self._cur_task_set.task_done()
+                    print("DONE", task)
             except task_set.TaskSetClosed:
-                pass
+                await asyncio.sleep(0) # prevent endless loop from blocking
         writer.close()
 
     async def _accept(self, reader, writer):
@@ -42,16 +43,19 @@ class MasterServer:
             self._accept, hostname, port, loop=self._loop)
 
     async def stop(self):
-        self._cur_task_set.cancel()
+        self._cur_task_set.close()
         self._closing = True
         self._server.close()
         await self._server.wait_closed()
         if len(self._clients) != 0:
             await asyncio.wait(self._clients)
-        self._waiter.set_result(None)
+        for waiter in self._waiters:
+            waiter.set_result(None)
 
     async def wait_stopped(self):
-        await self._waiter
+        waiter = asyncio.Future(loop=self._loop)
+        self._waiters.append(waiter)
+        await waiter
 
     async def run_task_set(self, ts):
         self._cur_task_set = task_set.TaskSetProcess(ts)
