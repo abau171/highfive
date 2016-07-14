@@ -24,7 +24,7 @@ class MasterServer:
                     ts.return_task(task)
                     print("RETURNED", task)
                 else:
-                    ts.task_done()
+                    ts.task_done(task + 1)
                     print("DONE", task)
         except task_set.TaskSetQueueClosed:
             pass

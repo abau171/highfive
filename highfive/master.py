@@ -4,6 +4,19 @@ import asyncio
 from . import server
 
 
+class TaskSetUserView:
+
+    def __init__(self, ts, loop):
+        self._ts = ts
+        self._loop = loop
+
+    def _run_coro(self, coro):
+        return asyncio.run_coroutine_threadsafe(coro, self._loop).result()
+
+    def next_result(self):
+        return self._run_coro(self._ts.next_result())
+
+
 def run_master_thread(server, loop):
     asyncio.set_event_loop(loop)
     loop.run_until_complete(server.wait_stopped())
@@ -34,6 +47,7 @@ class Master:
         self._thread.join()
         self._loop.close()
 
-    def run_task_set(self, ts):
-        return self._run_coro(self._server.run_task_set(ts))
+    def run_task_set(self, tasks):
+        ts = self._run_coro(self._server.run_task_set(tasks))
+        return TaskSetUserView(ts, self._loop)
 

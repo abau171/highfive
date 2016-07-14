@@ -6,6 +6,10 @@ class TaskSetClosed(Exception):
     pass
 
 
+class EndOfResults(Exception):
+    pass
+
+
 class TaskSetQueueClosed(Exception):
     pass
 
@@ -20,9 +24,12 @@ class TaskSetProcess:
 
         self._returned_tasks = collections.deque()
         self._closed = False
-        self._getters = collections.deque()
+        self._task_getters = collections.deque()
 
         self._close_if_no_tasks()
+
+        self._results = collections.deque()
+        self._result_getters = collections.deque()
 
     def _load_next_task(self):
         try:
@@ -34,11 +41,13 @@ class TaskSetProcess:
     def _close_if_no_tasks(self):
         if self._active_tasks == 0:
             self.close()
+            while len(self._result_getters) > 0:
+                self._result_getters.pop().set_exception(EndOfResults())
 
     async def next_task(self):
         if self._closed:
             raise TaskSetClosed()
-        if len(self._returned_tasks) > 0:
+        elif len(self._returned_tasks) > 0:
             return self._returned_tasks.popleft()
         elif self._on_deck is not None:
             task = self._on_deck
@@ -46,25 +55,40 @@ class TaskSetProcess:
             return task
         else:
             getter = asyncio.Future()
-            self._getters.append(getter)
+            self._task_getters.append(getter)
             return await getter
 
     def return_task(self, task):
         if self._closed:
             return
-        if len(self._getters) > 0:
-            self._getters.popleft().set_result(task)
+        elif len(self._task_getters) > 0:
+            self._task_getters.popleft().set_result(task)
         else:
             self._returned_tasks.append(task)
 
-    def task_done(self):
+    def task_done(self, result):
         self._active_tasks -= 1
         self._close_if_no_tasks()
+        if len(self._result_getters) > 0:
+            self._result_getters.pop().set_result(result)
+        else:
+            self._results.append(result)
+
+    async def next_result(self):
+        if len(self._results) == 0:
+            if self._closed:
+                raise EndOfResults()
+            else:
+                getter = asyncio.Future()
+                self._result_getters.append(getter)
+                return await getter
+        else:
+            return self._results.popleft()
 
     def close(self):
         self._closed = True
-        while len(self._getters) > 0:
-            self._getters.pop().set_exception(TaskSetClosed())
+        while len(self._task_getters) > 0:
+            self._task_getters.pop().set_exception(TaskSetClosed())
 
     def is_closed(self):
         return self._closed
