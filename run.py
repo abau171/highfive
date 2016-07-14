@@ -5,24 +5,23 @@ import highfive
 
 
 with highfive.Master("", 48484) as m:
+
     ts1 = m.run_task_set(range(10))
     ts2 = m.run_task_set(range(10))
+
     s1 = socket.socket()
-    s1.connect(("", 48484))
-    time.sleep(0.1)
     s2 = socket.socket()
+
+    s1.connect(("", 48484))
     s2.connect(("", 48484))
 
-    while True:
-        try:
-            print(ts2.next_result())
-        except highfive.EndOfResults:
-            break
-    while True:
-        try:
-            print(ts1.next_result())
-        except highfive.EndOfResults:
-            break
+
+    for result in ts1.results():
+        print(result)
+    for result in ts2.results():
+        print(result)
+    for result in ts1.results():
+        print(result)
 
     s1.close()
     s2.close()

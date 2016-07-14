@@ -59,7 +59,6 @@ class MasterServer:
         await waiter
 
     async def run_task_set(self, tasks):
-        # TODO add wrapper for user
         return self._task_set_queue.run_task_set(tasks)
 
 

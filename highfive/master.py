@@ -2,6 +2,7 @@ import threading
 import asyncio
 
 from . import server
+from . import task_set
 
 
 class TaskSetUserView:
@@ -9,12 +10,34 @@ class TaskSetUserView:
     def __init__(self, ts, loop):
         self._ts = ts
         self._loop = loop
+        self._results = []
+        self._end_of_results_reached = False
 
     def _run_coro(self, coro):
         return asyncio.run_coroutine_threadsafe(coro, self._loop).result()
 
     def next_result(self):
-        return self._run_coro(self._ts.next_result())
+        try:
+            result = self._run_coro(self._ts.next_result())
+            self._results.append(result)
+            return result
+        except task_set.EndOfResults:
+            self._end_of_results_reached = True
+            raise
+
+    def results(self):
+        i = 0
+        while True:
+            if i < len(self._results):
+                yield self._results[i]
+            elif not self._end_of_results_reached:
+                try:
+                    yield self.next_result()
+                except task_set.EndOfResults:
+                    break
+            else:
+                break
+            i += 1
 
 
 def run_master_thread(server, loop):
