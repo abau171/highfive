@@ -7,7 +7,7 @@ def handle_call(call):
     a = call[0]
     b = call[1]
     print("calculation {} + {} ...".format(a, b))
-    time.sleep(1)
+    time.sleep(0.2)
     c = a + b
     print("result: {}".format(c))
     return c

@@ -20,12 +20,10 @@ class AddTask(highfive.Task):
 with highfive.Master() as m:
 
     ts1 = m.run_task_set(AddTask(i, i + 1) for i in range(10))
-    #ts2 = m.run_task_set(AddTask(i, i + 1) for i in range(10))
+    ts2 = m.run_task_set(AddTask(i, i + 1) for i in range(10))
 
-    for a, b, c in ts1.results():
+    for a, b, c in ts2.results():
         print("{} + {} = {}".format(a, b, c))
-    #for a, b, c in ts2.results():
-    #    print("{} + {} = {}".format(a, b, c))
     for a, b, c in ts1.results():
         print("{} + {} = {}".format(a, b, c))
 

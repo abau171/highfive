@@ -68,11 +68,11 @@ class TaskSetProcess:
 
     def task_done(self, result):
         self._active_tasks -= 1
-        self._close_if_no_tasks()
         if len(self._result_getters) > 0:
             self._result_getters.pop().set_result(result)
         else:
             self._results.append(result)
+        self._close_if_no_tasks()
 
     async def next_result(self):
         if len(self._results) == 0:
