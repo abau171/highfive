@@ -1,6 +1,6 @@
 import collections
+import json
 import asyncio
-import random
 
 from . import task_set
 
@@ -19,14 +19,18 @@ class MasterServer:
         try:
             while not self._closing:
                 ts, task = await self._task_set_queue.next_task()
-                await asyncio.sleep(0.15)
-                if random.randint(0, 1) == 0:
+                try:
+                    task_msg = json.dumps(task) + "\n"
+                    writer.write(task_msg.encode("utf-8"))
+                    result_msg = (await reader.readline()).decode("utf-8")
+                    result = json.loads(result_msg)
+                    ts.task_done(result)
+                except:
                     ts.return_task(task)
-                    print("RETURNED", task)
-                else:
-                    ts.task_done(task + 1)
-                    print("DONE", task)
+                    raise
         except task_set.TaskSetQueueClosed:
+            pass
+        except json.JSONDecodeError:
             pass
         finally:
             writer.close()
