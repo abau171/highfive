@@ -1,3 +1,4 @@
+import collections
 import asyncio
 import random
 
@@ -11,24 +12,24 @@ class MasterServer:
         self._server = None
         self._closing = False
         self._clients = set()
-        self._waiters = []
-
-        self._cur_task_set = None
+        self._waiters = collections.deque()
+        self._task_set_queue = task_set.TaskSetProcessQueue()
 
     async def _handle(self, reader, writer):
-        while not self._closing:
-            try:
-                task = await self._cur_task_set.next_task()
+        try:
+            while not self._closing:
+                ts, task = await self._task_set_queue.next_task()
                 await asyncio.sleep(0.15)
                 if random.randint(0, 1) == 0:
-                    self._cur_task_set.return_task(task)
+                    ts.return_task(task)
                     print("RETURNED", task)
                 else:
-                    self._cur_task_set.task_done()
+                    ts.task_done()
                     print("DONE", task)
-            except task_set.TaskSetClosed:
-                await asyncio.sleep(0) # prevent endless loop from blocking
-        writer.close()
+        except task_set.TaskSetQueueClosed:
+            pass
+        finally:
+            writer.close()
 
     async def _accept(self, reader, writer):
         future = asyncio.ensure_future(
@@ -43,22 +44,23 @@ class MasterServer:
             self._accept, hostname, port, loop=self._loop)
 
     async def stop(self):
-        self._cur_task_set.close()
+        self._task_set_queue.close()
         self._closing = True
         self._server.close()
         await self._server.wait_closed()
         if len(self._clients) != 0:
             await asyncio.wait(self._clients)
-        for waiter in self._waiters:
-            waiter.set_result(None)
+        while len(self._waiters) > 0:
+            self._waiters.popleft().set_result(None)
 
     async def wait_stopped(self):
         waiter = asyncio.Future(loop=self._loop)
         self._waiters.append(waiter)
         await waiter
 
-    async def run_task_set(self, ts):
-        self._cur_task_set = task_set.TaskSetProcess(ts)
+    async def run_task_set(self, tasks):
+        # TODO add wrapper for user
+        return self._task_set_queue.run_task_set(tasks)
 
 
 async def start_master_server(hostname, port, loop):
