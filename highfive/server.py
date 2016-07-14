@@ -1,104 +1,113 @@
-"""Server which accepts connections from remote workers.
-
-When a remote worker connects, it begins processing tasks it registers itself,
-then begins receiving work from the task manager.
-
-"""
-
-import socket
+import asyncio
 import threading
-import contextlib
-
-import highfive.message_connection
+import socket
 
 
-class WorkerRegistry:
-    """Tracks all active workers.
-    
-    Registration and deregistration are thread-safe.
-    
-    """
+class MasterServer:
 
-    def __init__(self):
-        self._worker_conns = set()
-        self._mutex = threading.Lock()
+    def __init__(self, loop):
+        self._loop = loop
+        self._server = None
+        self._closing = False
+        self._clients = set()
+        self._job_queue = asyncio.Queue(loop=self._loop)
+        self._result_queue = asyncio.Queue(loop=self._loop)
 
-    @contextlib.contextmanager
-    def registered(self, worker_conn):
-        """Manages registration and deregistration of worker connections."""
+    async def _handle(self, reader, writer):
+        while True:
+            job = None
+            while not self._closing:
+                try:
+                    job = await asyncio.wait_for(self._job_queue.get(), 1)
+                    break
+                except asyncio.TimeoutError:
+                    pass
+            if self._closing:
+                break
+            await asyncio.sleep(1)
+            self._result_queue.put_nowait(job + 1)
+        writer.close()
 
-        with self._mutex:
-            self._worker_conns.add(worker_conn)
-        try:
-            yield
-        finally:
-            with self._mutex:
-                self._worker_conns.remove(worker_conn)
+    async def _accept(self, reader, writer):
+        task = self._loop.create_task(self._handle(reader, writer))
+        def client_done(task):
+            self._clients.remove(task)
+        task.add_done_callback(client_done)
+        self._clients.add(task)
 
+    async def start(self, hostname, port):
+        self._server = await asyncio.streams.start_server(
+            self._accept, hostname, port, loop=self._loop)
 
-class WorkerConnectionThread(threading.Thread):
-    """A connection to a single remote worker which can execute tasks.
+    async def stop(self):
+        self._closing = True
+        self._server.close()
+        await self._server.wait_closed()
+        if len(self._clients) != 0:
+            await asyncio.wait(self._clients)
 
-    Connected workers register themselves, then begin executing tasks received
-    from the task manager. Exceptions recieved from the task being executed
-    both cause the task to fail and close the connection to the worker. The
-    connection is closed because there is no guarantee that any exception
-    raised by a task will leave the remote worker in a consistent state.
+    async def wait_stopped(self):
+        await self._server.wait_closed()
 
-    """
+    async def add_job(self, job):
+        self._job_queue.put_nowait(job)
 
-    def __init__(self, client_socket, registry, task_mgr):
-        super().__init__(daemon=True)
-        self._client_socket = client_socket
-        self._connection = highfive.message_connection.MessageConnection(
-            self._client_socket)
-        self._registry = registry
-        self._task_mgr = task_mgr
-
-    def _handle_tasks(self):
-        """Repeatedly gets and executes tasks from the task manager."""
-
-        try:
-            while not self._connection.is_closed():
-                with self._task_mgr.task() as task:
-                    task.run(self._connection)
-        except highfive.message_connection.Closed:
-            pass
-        finally:
-            self._client_socket.close()
-            print("connection closed.")
-
-    def run(self):
-        """Registers the connection, then begins running tasks."""
-
-        with self._registry.registered(self):
-            self._handle_tasks()
+    async def get_result(self):
+        return await self._result_queue.get()
 
 
-class ServerThread(threading.Thread):
-    """The server which accepts new connections.
+async def start_master_server(hostname, port, loop):
+    server = MasterServer(loop)
+    await server.start(hostname, port)
+    return server
 
-    New worker connections are given the active task manager from which they
-    get tasks to process.
 
-    """
+class Master:
 
-    def __init__(self, hostname, port, task_mgr):
-        super().__init__(daemon=True)
+    def __init__(self, hostname, port):
         self._hostname = hostname
         self._port = port
-        self._registry = WorkerRegistry()
-        self._task_mgr = task_mgr
+        self._loop = None
+        self._server = None
+        self._thread = None
 
-    def run(self):
-        with socket.socket() as server_socket:
-            server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            server_socket.bind((self._hostname, self._port))
-            server_socket.listen(5)
-            while True:
-                client_socket, address = server_socket.accept()
-                WorkerConnectionThread(
-                    client_socket,
-                    self._registry,
-                    self._task_mgr).start()
+    def _run_coro(self, coro):
+        return asyncio.run_coroutine_threadsafe(coro, self._loop).result()
+
+    def __enter__(self):
+        self.start()
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.stop()
+
+    def start(self):
+        self._loop = asyncio.new_event_loop()
+        self._server = self._loop.run_until_complete(start_master_server(self._hostname, self._port, self._loop))
+        def run_master_thread(server, loop):
+            asyncio.set_event_loop(loop)
+            loop.run_until_complete(server.wait_stopped())
+            loop.close()
+        self._thread = threading.Thread(
+            target=run_master_thread, args=(self._server, self._loop))
+        self._thread.start()
+
+    def stop(self):
+        self._run_coro(self._server.stop())
+
+    def add_job(self, job):
+        self._run_coro(self._server.add_job(job))
+
+    def get_result(self):
+        return self._run_coro(self._server.get_result())
+
+
+with Master("", 48484) as m:
+    for i in range(10):
+        m.add_job(i)
+    s = socket.socket()
+    s.connect(("", 48484))
+    for _ in range(5):
+        print(m.get_result())
+    s.close()
 
