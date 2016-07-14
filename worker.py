@@ -1,18 +1,17 @@
-import socket
-import json
 import time
 
-with socket.socket() as s:
-    s.connect(("", 48484))
-    sf = s.makefile("rw")
-    while True:
-        task = json.loads(sf.readline())
-        a = task[0]
-        b = task[1]
-        print("calculation {} + {} ...".format(a, b))
-        time.sleep(1)
-        c = a + b
-        print("result: {}".format(c))
-        sf.write(json.dumps(c) + "\n")
-        sf.flush()
+import highfive
+
+
+def handle_call(call):
+    a = call[0]
+    b = call[1]
+    print("calculation {} + {} ...".format(a, b))
+    time.sleep(1)
+    c = a + b
+    print("result: {}".format(c))
+    return c
+
+
+highfive.run_worker(handle_call)
 

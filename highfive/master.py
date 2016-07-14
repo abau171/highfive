@@ -48,7 +48,7 @@ def run_master_thread(server, loop):
 
 class Master:
 
-    def __init__(self, hostname, port):
+    def __init__(self, hostname="", port=48484):
         self._loop = asyncio.new_event_loop()
         self._server = self._loop.run_until_complete(
             server.start_master_server(hostname, port, self._loop))
