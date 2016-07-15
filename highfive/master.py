@@ -13,6 +13,12 @@ class TaskSetUserView:
         self._results = []
         self._end_of_results_reached = False
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.cancel()
+
     def _run_coro(self, coro):
         return asyncio.run_coroutine_threadsafe(coro, self._loop).result()
 
@@ -38,6 +44,9 @@ class TaskSetUserView:
             else:
                 break
             i += 1
+
+    def cancel(self):
+        self._loop.call_soon_threadsafe(self._ts.close)
 
 
 def run_master_thread(server, loop):

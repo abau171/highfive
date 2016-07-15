@@ -19,13 +19,15 @@ class AddTask(highfive.Task):
 
 with highfive.Master() as m:
 
-    ts1 = m.run_task_set(AddTask(i, i + 1) for i in range(10))
-    ts2 = m.run_task_set(AddTask(i, i + 1) for i in range(10))
+    with m.run_task_set(AddTask(i, i + 1) for i in range(100)) as ts:
+        for a, b, c in ts.results():
+            print("{} + {} = {}".format(a, b, c))
+            if a == 4:
+                break
 
-    for a, b, c in ts2.results():
-        print("{} + {} = {}".format(a, b, c))
-    for a, b, c in ts1.results():
-        print("{} + {} = {}".format(a, b, c))
+    with m.run_task_set(AddTask(i, i + 1) for i in range(10)) as ts:
+        for a, b, c in ts.results():
+            print("{} + {} = {}".format(a, b, c))
 
     print("closing...")
 print("closed")
