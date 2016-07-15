@@ -1,3 +1,4 @@
+import multiprocessing
 import socket
 import json
 
@@ -15,4 +16,16 @@ def run_worker(handle_call, hostname="", port=48484):
             pass
         finally:
             sfile.close()
+
+def run_workers(handle_call, hostname="", port=48484, count=0):
+    if count == 0:
+        count = multiprocessing.cpu_count()
+    procs = []
+    for _ in range(count):
+        proc = multiprocessing.Process(
+            target=run_worker, args=(handle_call, hostname, port))
+        procs.append(proc)
+        proc.start()
+    for proc in procs:
+        proc.join()
 
