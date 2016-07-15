@@ -1,24 +1,23 @@
 from setuptools import setup
 
 long_desc = """
-HighFive is a distributed processing framework designed to be used for
-collaborative computation. It is made to be fault-tolerant to network issues
-and manual disconnects so workers can come and go as they please without
-disrupting running processes.
+HighFive is a simple distributed processing framework designed to support a large pool of transient workers coming and going as they please. Workers running in the pool are invisible to the owner, so there is no need to worry about distributing tasks manually or the possibility of network issues as these are handled by the framework. HighFive is made for cooperative processing of CPU-heavy tasks by allowing you and your friends to chip in as much computing power as you want, for as long as you want!
+
+HighFive is written in Python 3, and uses asyncio for managing connections. Because it uses async/await syntax, it is currently only supported by Python 3.5 and up (this may change in the future).
 
 """
 
 setup(
     name = "highfive",
     packages = ["highfive"],
-    version = "0.0",
+    version = "0.1",
     description =
-        "Fault-tolerant, cooperative distributed processing framework.",
+        "Framework for fault-tolerant cooperative distributed processing.",
     long_description = long_desc,
     author = "Andrew Bauer",
     author_email = "abau171@gmail.com",
     url = "https://github.com/abau171/highfive",
-    #download_url = "",
+    download_url = "https://github.com/abau171/highfive/tarball/0.1",
     license = "MIT",
     keywords =
         ["distributed", "queue", "task queue", "job queue", "collaborative"],
