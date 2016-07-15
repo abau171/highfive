@@ -31,6 +31,7 @@ def handle_call(call):
 
 
 # Connect to a local HighFive server, and handle calls using as many
-# processes as there are CPU cores available.
+# processes as there are CPU cores available. To run from a different
+# machine, you can add 'hostname=<master ip address>' to the parameters.
 highfive.run_workers(handle_call)
 
