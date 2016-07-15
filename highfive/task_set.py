@@ -18,18 +18,15 @@ class TaskSetProcess:
 
     def __init__(self, tasks):
         self._task_iterator = iter(tasks)
-        self._active_tasks = 0
-
-        self._load_next_task()
-
         self._returned_tasks = collections.deque()
-        self._closed = False
         self._task_getters = collections.deque()
-
-        self._close_if_no_tasks()
-
+        self._active_tasks = 0
         self._results = collections.deque()
         self._result_getters = collections.deque()
+        self._closed = False
+
+        self._load_next_task()
+        self._close_if_no_tasks()
 
     def _load_next_task(self):
         try:
