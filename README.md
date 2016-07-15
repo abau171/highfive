@@ -20,9 +20,11 @@ currently only supported by Python 3.5 and up (this may change in the future).
 
 ### Installation
 
-HighFive will soon be available on [PyPI](https://pypi.python.org/pypi).
+HighFive is available on [PyPI](https://testpypi.python.org/pypi/highfive)!
 
-Until then, you can install HighFive manually:
+Simply run `pip install highfive` to install the latest version.
+
+You can also install HighFive manually:
 
 1. Clone the repository.
 2. `cd` into the root directory.

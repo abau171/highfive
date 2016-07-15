@@ -17,7 +17,7 @@ setup(
     author = "Andrew Bauer",
     author_email = "abau171@gmail.com",
     url = "https://github.com/abau171/highfive",
-    download_url = "https://github.com/abau171/highfive/tarball/0.1",
+    download_url = "https://github.com/abau171/highfive/archive/v0.1.tar.gz",
     license = "MIT",
     keywords =
         ["distributed", "queue", "task queue", "job queue", "collaborative"],
