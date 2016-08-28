@@ -10,13 +10,58 @@ class Job:
         pass
 
 
+class ResultSet:
+
+    def __init__(self, *, loop):
+        self._loop = loop
+        self._results = []
+        self._complete = False
+        self._waiters = []
+
+    def __len__(self):
+        return len(self._results)
+
+    def __getitem__(self, i):
+        return self._results[i]
+
+    def _change(self):
+        for waiter in self._waiters:
+            if not waiter.done():
+                waiter.set_result(None)
+        self._waiters = []
+
+    def add(self, result):
+        self._results.append(result)
+        self._change()
+
+    def complete(self):
+        self._complete = True
+        self._change()
+
+    def is_complete(self):
+        return self._complete
+
+    def wait_changed(self):
+        waiter = self._loop.create_future()
+        if self.is_complete():
+            waiter.set_result(None)
+        else:
+            self._waiters.append(waiter)
+        return waiter
+
+
+class EndOfResults(Exception):
+    pass
+
+
 class JobSet:
 
-    def __init__(self, jobs):
+    def __init__(self, jobs, *, loop):
+        self._loop = loop
         self._jobs = iter(jobs)
         self._on_deck = None
         self._return_queue = collections.deque()
-        self._results = []
+        self._results = ResultSet(loop=self._loop)
         self._active_jobs = 0
 
         self._load_job()
@@ -46,8 +91,30 @@ class JobSet:
         self._return_queue.append(job)
 
     def add_result(self, result):
-        self._results.append(result)
+        self._results.add(result)
         self._active_jobs -= 1
+        if self._active_jobs == 0:
+            self._results.complete()
+
+    def get_handle(self):
+        return JobSetHandle(self, self._results)
+
+
+class JobSetHandle:
+
+    def __init__(self, js, results):
+        self._js = js
+        self._results = results
+        self._i = 0
+
+    async def next_result(self):
+        while self._i >= len(self._results):
+            if self._results.is_complete():
+                raise EndOfResults
+            await self._results.wait_changed()
+        result = self._results[self._i]
+        self._i += 1
+        return result
 
 
 class JobManager:
@@ -90,12 +157,13 @@ class JobManager:
             self._distribute_jobs()
 
     def add_job_set(self, jobs):
-        js = JobSet(jobs)
+        js = JobSet(jobs, loop=self._loop)
         if self._active_js is None:
             self._active_js = js
             self._distribute_jobs()
         else:
             self._js_queue.append(js)
+        return js.get_handle()
 
     def add_worker(self, worker):
         self._ready.append(worker)

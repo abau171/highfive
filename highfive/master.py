@@ -39,22 +39,26 @@ class Master:
         self._job_manager.add_worker(w)
 
     def run_job_set(self, jobs):
-        self._job_manager.add_job_set(jobs)
+        return self._job_manager.add_job_set(jobs)
 
+
+async def main(loop):
+    m = Master(loop=loop)
+    m.add_worker(-1)
+    h = m.run_job_set(FakeJob(i) for i in range(10))
+    try:
+        while True:
+            m.add_worker(await h.next_result())
+    except job.EndOfResults:
+        pass
+    h = m.run_job_set(FakeJob(i) for i in range(10, 20))
+    try:
+        while True:
+            await h.next_result()
+    except job.EndOfResults:
+        pass
 
 loop = asyncio.get_event_loop()
 asyncio.set_event_loop(None)
-
-m = Master(loop=loop)
-
-m.add_worker(1)
-m.add_worker(2)
-m.add_worker(3)
-m.run_job_set(FakeJob(i) for i in range(10))
-m.run_job_set(FakeJob(i) for i in range(10, 20))
-
-try:
-    loop.run_forever()
-except KeyboardInterrupt:
-    loop.close()
+loop.run_until_complete(main(loop))
 
