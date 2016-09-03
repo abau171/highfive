@@ -11,11 +11,6 @@ class Closed(Exception):
 
 
 class EndOfResults(Exception):
-    """
-    Raised when a result set has been completed, but the next result is being
-    fetched.
-    """
-
     pass
 
 
@@ -115,6 +110,29 @@ class ResultSet:
         return waiter
 
 
+class ResultSetIterator:
+
+    def __init__(self, results):
+
+        self._results = results
+        self._i = 0
+
+    async def next_result(self):
+
+        if self._i >= len(self._results):
+            if self._results.is_complete():
+                raise EndOfResults
+            else:
+                await self._results.wait_changed()
+
+        if self._i >= len(self._results):
+            raise EndOfResults
+        else:
+            result = self._results[self._i]
+            self._i += 1
+            return result
+
+
 class JobSet:
     """
     A set of jobs to be distributed across the workers. The job set contains
@@ -130,6 +148,7 @@ class JobSet:
         self._results = ResultSet(loop=self._loop)
         self._active_jobs = 0
         self._cancelled = False
+        self._waiters = []
 
         self._load_job()
 
@@ -145,7 +164,7 @@ class JobSet:
         except StopIteration:
             self._on_deck = None
 
-    def jobs_available(self):
+    def job_available(self):
         """
         Indicates whether the next call to get_job will return a job, or no
         jobs are available to be run.
@@ -153,12 +172,17 @@ class JobSet:
 
         if self._cancelled:
             return False
+
         return len(self._return_queue) > 0 or self._on_deck is not None
 
-    def is_complete(self):
+    def is_done(self):
         """
-        Indicates whether the job set has been completed.
+        Indicates whether the job set is done executing. This can mean either
+        every job has been run successfully or the job set has been cancelled.
         """
+
+        if self._cancelled:
+            return True
 
         return self._active_jobs == 0
 
@@ -171,6 +195,7 @@ class JobSet:
 
         if self._cancelled:
             raise Closed
+
         if len(self._return_queue) > 0:
             return self._return_queue.popleft()
         else:
@@ -180,18 +205,15 @@ class JobSet:
 
     def return_job(self, job):
         """
-        Returns an incomplete job to the job set to be run again later. If the
-        job set has already been cancelled, the job is discarded and the
-        active job count is decremented. If no active jobs remain, the job set
-        becomes completed.
+        Returns an incomplete job to the job set to be run again later. If no
+        active jobs remain, the job set becomes completed. If the job set has
+        already been cancelled, raises a Closed exception.
         """
 
         if self._cancelled:
-            self._active_jobs -= 1
-            if self._active_jobs == 0:
-                self._results.complete()
-        else:
-            self._return_queue.append(job)
+            raise Closed
+
+        self._return_queue.append(job)
 
     def add_result(self, result):
         """
@@ -202,52 +224,54 @@ class JobSet:
 
         if self._cancelled:
             raise Closed
+
         self._results.add(result)
         self._active_jobs -= 1
         if self._active_jobs == 0:
-            self._results.complete()
+            self._done()
+
+    def results(self):
+        """
+        Gets the result set belonging to the job set.
+        """
+
+        return self._results
 
     def cancel(self):
         """
         Cancels the job set. No more jobs will be returned from get_job(), and
-        no more results will be accepted. The job set will still not be
-        completed until all jobs are accounted for, and the active job count is
-        reduced to 0.
+        no more results will be accepted.
         """
 
-        self._cancelled = True
+        if not self.is_done():
+            self._cancelled = True
 
-    def get_handle(self):
+            self._jobs = None
+            self._on_deck = None
+            self._return_queue = None
+            self._active_jobs = 0
+
+            self._done()
+
+    def _done(self):
         """
-        Returns a handle for external control of the job set.
-        """
-
-        return JobSetHandle(self, self._results)
-
-
-class JobSetHandle:
-    """
-    A handle used to externally control job sets without interfering with the
-    job manager.
-    """
-
-    def __init__(self, js, results):
-        self._js = js
-        self._results = results
-        self._i = 0
-
-    async def next_result(self):
-        """
-        Gets the next result of the job set, or raises an EndOfResults
-        exception if no more results will be found. This method may wait for
-        a result to be added if one is not currently available.
+        Marks the job set as completed, and notifies all waiting tasks.
         """
 
-        while self._i >= len(self._results):
-            if self._results.is_complete():
-                raise EndOfResults
-            await self._results.wait_changed()
-        result = self._results[self._i]
-        self._i += 1
-        return result
+        self._results.complete()
+        waiters = self._waiters
+        self._waiters = None
+        for waiter in waiters:
+            waiter.set_result(None)
+
+    async def wait_done(self):
+        """
+        Waits until the job set has completed all jobs or has been cancelled.
+        If the job set is already done, returns immediately
+        """
+        
+        if not self.is_done():
+            future = self._loop.create_future()
+            self._waiters.append(future)
+            await future
 

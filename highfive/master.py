@@ -1,79 +1,63 @@
 import random
 import asyncio
 
-import jobset
+import jobs
 import manager
 
 
-class FakeWorker:
-
-    def __init__(self, i, *, loop):
-        self._loop = loop
-        self._i = i
-        self._closed = False
-
-    async def make_call(self, call):
-        if self._closed:
-            raise Exception("fake worker is closed")
-        print("CALL TO {}:".format(self._i), call)
-        await asyncio.sleep(random.random(), loop=self._loop)
-        return call
-
-    def close(self):
-        self._closed = True
-
-
-class FakeJob(jobset.Job):
-
-    def __init__(self, i):
-        self._i = i
-
+class AddJob(jobs.Job):
+    def __init__(self, a, b):
+        self._a = a
+        self._b = b
     def get_call(self):
-        return self._i
-
+        #print("GET: {} + {}".format(self._a, self._b))
+        return [self._a, self._b]
     def get_result(self, response):
-        return response
+        #print("RESULT: {}".format(response))
+        return self._a, self._b, response
 
 
-class Master:
-
-    def __init__(self, *, loop):
+class AddWorker:
+    def __init__(self, loop):
         self._loop = loop
-        self._job_manager = manager.JobManager(loop=self._loop)
-
-    def add_worker(self, i):
-        w = FakeWorker(i, loop=self._loop)
-        self._job_manager.add_worker(w)
-
-    def run_job_set(self, jobs):
-        return self._job_manager.add_job_set(jobs)
-
+    async def make_call(self, call):
+        await asyncio.sleep(random.random(), loop=self._loop)
+        #print("WORKER: {} + {} = {}".format(call[0], call[1], call[0] + call[1]))
+        return call[0] + call[1]
     def close(self):
-        self._job_manager.close()
-
-    async def wait_closed(self):
-        await self._job_manager.wait_closed()
+        pass
 
 
 async def main(loop):
-    m = Master(loop=loop)
-    m.add_worker(-1)
-    h = m.run_job_set(FakeJob(i) for i in range(10))
+
+    m = manager.JobManager(loop=loop)
+
+    js = jobs.JobSet((AddJob(i, i * i) for i in range(10)), loop=loop)
+    ri = jobs.ResultSetIterator(js.results())
+    m.add_job_set(js)
+
+    m.add_worker(AddWorker(loop))
+    m.add_worker(AddWorker(loop))
+
     try:
         while True:
-            m.add_worker(await h.next_result())
-    except jobset.EndOfResults:
+            print("{} + {} = {}".format(*await ri.next_result()))
+    except jobs.EndOfResults:
         pass
-    h = m.run_job_set(FakeJob(i) for i in range(10, 20))
+
+    js = jobs.JobSet((AddJob(i, i * i) for i in range(10)), loop=loop)
+    ri = jobs.ResultSetIterator(js.results())
+    m.add_job_set(js)
+
     try:
         while True:
-            r = await h.next_result()
-            print(r)
-            if r == 15:
-                m.close()
-    except jobset.EndOfResults:
+            print("{} + {} = {}".format(*await ri.next_result()))
+    except jobs.EndOfResults:
         pass
+
+    m.close()
     await m.wait_closed()
+
 
 loop = asyncio.get_event_loop()
 asyncio.set_event_loop(None)
