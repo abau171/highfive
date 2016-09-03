@@ -160,13 +160,13 @@ class JobSet:
         Indicates whether the job set has been completed.
         """
 
-        if self._cancelled:
-            return False
         return self._active_jobs == 0
 
     def get_job(self):
         """
-        Gets a job from the job set if one is available to be run.
+        Gets a job from the job set if one is available to be run. The
+        jobs_available() method should be consulted first to determine if a
+        job can be obtained with this method.
         """
 
         if self._cancelled:
@@ -180,15 +180,24 @@ class JobSet:
 
     def return_job(self, job):
         """
-        Returns an incomplete job to the job set to be run again later.
+        Returns an incomplete job to the job set to be run again later. If the
+        job set has already been cancelled, the job is discarded and the
+        active job count is decremented. If no active jobs remain, the job set
+        becomes completed.
         """
 
-        self._return_queue.append(job)
+        if self._cancelled:
+            self._active_jobs -= 1
+            if self._active_jobs == 0:
+                self._results.complete()
+        else:
+            self._return_queue.append(job)
 
     def add_result(self, result):
         """
         Adds a result, and decrements the active job count. If no active jobs
-        remain, the job set becomes completed.
+        remain, the job set becomes completed. Trying to add a result when the
+        job set has been closed will result in a ClosedException being raised.
         """
 
         if self._cancelled:
@@ -201,13 +210,12 @@ class JobSet:
     def cancel(self):
         """
         Cancels the job set. No more jobs will be returned from get_job(), and
-        no more results will be accepted.
+        no more results will be accepted. The job set will still not be
+        completed until all jobs are accounted for, and the active job count is
+        reduced to 0.
         """
 
-        if not self._cancelled:
-            self._cancelled = True
-            if not self._results.is_complete():
-                self._results.complete()
+        self._cancelled = True
 
     def get_handle(self):
         """
@@ -281,6 +289,21 @@ class JobManager:
         for worker in ready:
             self._assign(worker)
 
+    def _check_js_complete(self):
+        """
+        If the current active job set has been completed, the next one from
+        the job set queue is activated if one exists and the ready workers
+        are run.
+        """
+
+        while self._active_js.is_complete():
+            try:
+                self._active_js = self._js_queue.popleft()
+            except IndexError:
+                self._active_js = None
+                return
+        self._assign_ready()
+
     async def _handle_job(self, worker, job):
         """
         Runs a job on a worker, then handles its success or failure.
@@ -305,24 +328,20 @@ class JobManager:
         self._assign(worker)
         result = job.get_result(response)
         self._active_js.add_result(result)
-        while self._active_js.is_complete():
-            try:
-                self._active_js = self._js_queue.popleft()
-            except IndexError:
-                self._active_js = None
-                return
-        self._assign_ready()
+        self._check_js_complete()
 
     def _job_fail(self, worker, job):
         """
         Runs when a job has failed for some reason. This indicates that the
         worker is no longer usable and should be closed. The job is returned
-        to the job set to be run later, and the worker is closed.
+        to the job set to be run later, and the worker is closed. If the
+        active job set is completed, the next job set is activated.
         """
 
         del self._running[worker]
-        self._active_js.return_job(job)
         worker.close()
+        self._active_js.return_job(job)
+        self._check_js_complete()
         if self._closing and len(self._running) == 0:
             self._wakeup()
 
