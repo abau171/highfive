@@ -9,11 +9,17 @@ class FakeWorker:
     def __init__(self, i, *, loop):
         self._loop = loop
         self._i = i
+        self._closed = False
 
     async def make_call(self, call):
+        if self._closed:
+            raise Exception("fake worker is closed")
         print("CALL TO {}:".format(self._i), call)
         await asyncio.sleep(random.random(), loop=self._loop)
         return call
+
+    def close(self):
+        self._closed = True
 
 
 class FakeJob(job.Job):
@@ -41,6 +47,12 @@ class Master:
     def run_job_set(self, jobs):
         return self._job_manager.add_job_set(jobs)
 
+    def close(self):
+        self._job_manager.close()
+
+    async def wait_closed(self):
+        await self._job_manager.wait_closed()
+
 
 async def main(loop):
     m = Master(loop=loop)
@@ -54,11 +66,16 @@ async def main(loop):
     h = m.run_job_set(FakeJob(i) for i in range(10, 20))
     try:
         while True:
-            await h.next_result()
+            r = await h.next_result()
+            print(r)
+            if r == 15:
+                m.close()
     except job.EndOfResults:
         pass
+    await m.wait_closed()
 
 loop = asyncio.get_event_loop()
 asyncio.set_event_loop(None)
 loop.run_until_complete(main(loop))
+loop.close()
 
