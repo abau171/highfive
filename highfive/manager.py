@@ -36,20 +36,21 @@ class JobManager:
                 self._active_js.return_job(job)
         else:
             del self._running[worker]
-            self._assign(worker)
+            if not self._closing:
+                self._assign(worker)
             if not self._active_js.is_done():
                 self._active_js.add_result(result)
 
     def _assign(self, worker):
         if self._active_js is not None and self._active_js.job_available():
             job = self._active_js.get_job()
-            self._running[worker] = asyncio.ensure_future(self._run_job(worker, job), loop=self._loop)
+            self._running[worker] = self._loop.create_task(self._run_job(worker, job))
         else:
             self._ready.append(worker)
 
     def _activate(self, js):
         self._active_js = js
-        self._active_task = asyncio.ensure_future(self._run_active_js(), loop=self._loop)
+        self._active_task = self._loop.create_task(self._run_active_js())
         self._running = dict()
         ready = self._ready
         self._ready = collections.deque()
@@ -60,8 +61,6 @@ class JobManager:
         await self._active_js.wait_done()
         tasks = self._running.values()
         if len(tasks) > 0:
-            for task in tasks:
-                task.cancel()
             await asyncio.wait(tasks, loop=self._loop)
         if not self._closing and len(self._js_queue) > 0:
             next_js = self._js_queue.pop()

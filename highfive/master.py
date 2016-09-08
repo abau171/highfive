@@ -41,21 +41,28 @@ async def main(loop):
 
     try:
         while True:
-            print("{} + {} = {}".format(*await ri.next_result()))
+            a, b, c = await ri.next_result()
+            print("{} + {} = {}".format(a, b, c))
+            if a == 5:
+                js.cancel()
     except jobs.EndOfResults:
         pass
 
     js = jobs.JobSet((AddJob(i, i * i) for i in range(10)), loop=loop)
     ri = jobs.ResultSetIterator(js.results())
     m.add_job_set(js)
+    js2 = jobs.JobSet((AddJob(i, i * i) for i in range(10)), loop=loop)
+    m.add_job_set(js2)
 
     try:
         while True:
-            print("{} + {} = {}".format(*await ri.next_result()))
+            a, b, c = await ri.next_result()
+            print("{} + {} = {}".format(a, b, c))
+            if a == 5:
+                m.close()
     except jobs.EndOfResults:
         pass
 
-    m.close()
     await m.wait_closed()
 
 
