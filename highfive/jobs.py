@@ -162,6 +162,17 @@ class JobSet:
         except StopIteration:
             self._on_deck = None
 
+    def _done(self):
+        """
+        Marks the job set as completed, and notifies all waiting tasks.
+        """
+
+        self._results.complete()
+        waiters = self._waiters
+        self._waiters = None
+        for waiter in waiters:
+            waiter.set_result(None)
+
     def job_available(self):
         """
         Indicates whether the next call to get_job will return a job, or no
@@ -248,17 +259,6 @@ class JobSet:
         self._active_jobs = 0
 
         self._done()
-
-    def _done(self):
-        """
-        Marks the job set as completed, and notifies all waiting tasks.
-        """
-
-        self._results.complete()
-        waiters = self._waiters
-        self._waiters = None
-        for waiter in waiters:
-            waiter.set_result(None)
 
     async def wait_done(self):
         """

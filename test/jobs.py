@@ -27,6 +27,8 @@ class TestResultSet(unittest.TestCase):
         self.assertEqual(len(rs), 0)
         self.assertTrue(rs.is_complete())
 
+        self._loop.close()
+
     def test_results(self):
         """
         Ensures that a result set can add results, and effectively tracks and
@@ -55,6 +57,8 @@ class TestResultSet(unittest.TestCase):
         self.assertEqual(len(rs), 3)
         self.assertTrue(rs.is_complete())
 
+        self._loop.close()
+
     def test_ops_after_complete(self):
         """
         Completes a result set, then makes sure new results cannot be added
@@ -69,6 +73,8 @@ class TestResultSet(unittest.TestCase):
             rs.add(0)
         with self.assertRaises(RuntimeError):
             rs.complete()
+
+        self._loop.close()
 
     def test_bad_index(self):
         """
@@ -86,6 +92,8 @@ class TestResultSet(unittest.TestCase):
             rs[3]
         with self.assertRaises(IndexError):
             rs[10]
+
+        self._loop.close()
 
     def test_wait_complete(self):
         """
@@ -106,6 +114,8 @@ class TestResultSet(unittest.TestCase):
 
         self._loop.run_until_complete(waiter())
 
+        self._loop.close()
+
     def test_wait_result_add(self):
         """
         Ensures that adding a result invokes a change.
@@ -123,6 +133,61 @@ class TestResultSet(unittest.TestCase):
             self.assertFalse(rs.is_complete())
 
         self._loop.run_until_complete(waiter())
+
+        self._loop.close()
+
+
+class TestResultSetIterator(unittest.TestCase):
+
+    def setUp(self):
+
+        self._loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(None)
+
+    def test_no_results(self):
+        """
+        Ensures that a completed result set with no results immediately
+        indicates the end of results when waited on.
+        """
+
+        rs = jobs.ResultSet(loop=self._loop)
+        rs.complete()
+
+        ri = jobs.ResultSetIterator(rs)
+
+        async def nexter():
+            with self.assertRaises(jobs.EndOfResults):
+                await ri.next_result()
+
+        self._loop.run_until_complete(nexter())
+
+        self._loop.close()
+
+    def test_some_results(self):
+        """
+        Ensures that results can be iterated over asynchronously whether
+        results are currently available or not.
+        """
+
+        rs = jobs.ResultSet(loop=self._loop)
+        rs.add(0)
+
+        ri = jobs.ResultSetIterator(rs)
+
+        async def add_completer():
+            rs.add(1)
+            rs.complete()
+
+        async def nexter():
+            await ri.next_result()
+            self._loop.create_task(add_completer())
+            await ri.next_result()
+            with self.assertRaises(jobs.EndOfResults):
+                await ri.next_result()
+
+        self._loop.run_until_complete(nexter())
+
+        self._loop.close()
 
 
 class TestJobSet(unittest.TestCase):
@@ -171,6 +236,8 @@ class TestJobSet(unittest.TestCase):
         self.assertTrue(js.results().is_complete())
         self.assertEqual(len(js.results()), 1)
 
+        self._loop.close()
+
     def test_one_job_return(self):
         """
         Runs through the normal execution of a job set with a single job,
@@ -199,6 +266,8 @@ class TestJobSet(unittest.TestCase):
         self.assertFalse(js.job_available())
         self.assertTrue(js.results().is_complete())
         self.assertEqual(len(js.results()), 1)
+
+        self._loop.close()
 
     def test_many_jobs_mixed(self):
         """
@@ -245,6 +314,8 @@ class TestJobSet(unittest.TestCase):
         self.assertTrue(js.results().is_complete())
         self.assertEqual(len(js.results()), 3)
 
+        self._loop.close()
+
     def test_done_means_done(self):
         """
         Ensures that when a job set is done, jobs cannot be returned, results
@@ -259,6 +330,8 @@ class TestJobSet(unittest.TestCase):
             js.add_result(None)
         with self.assertRaises(RuntimeError):
             js.cancel()
+
+        self._loop.close()
 
     def test_cancel(self):
         """
@@ -280,6 +353,8 @@ class TestJobSet(unittest.TestCase):
         self.assertTrue(js.is_done())
         self.assertFalse(js.job_available())
 
+        self._loop.close()
+
     def test_wait_done(self):
         """
         Ensures that waiting on the completion of a job set works whether the
@@ -299,6 +374,8 @@ class TestJobSet(unittest.TestCase):
             await js.wait_done()
 
         self._loop.run_until_complete(waiter())
+
+        self._loop.close()
 
 
 if __name__ == "__main__":
