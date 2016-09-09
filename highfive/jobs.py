@@ -68,6 +68,9 @@ class ResultSet:
         Adds a new result.
         """
 
+        if self.is_complete():
+            raise RuntimeError("add result when result set complete")
+
         self._results.append(result)
         self._change()
 
@@ -76,6 +79,9 @@ class ResultSet:
         Indicates that the result set is complete and no new results will be
         added to it in the future.
         """
+
+        if self.is_complete():
+            raise RuntimeError("result set already complete")
 
         self._complete = True
         self._change()
@@ -87,19 +93,17 @@ class ResultSet:
 
         return self._complete
 
-    def wait_changed(self):
+    async def wait_changed(self):
         """
         Waits until the result set changes. Possible changes can be a result
         being added or the result set being completed. If the result set is
         already completed, this method returns immediately.
         """
 
-        waiter = self._loop.create_future()
-        if self.is_complete():
-            waiter.set_result(None)
-        else:
+        if not self.is_complete():
+            waiter = self._loop.create_future()
             self._waiters.append(waiter)
-        return waiter
+            await waiter
 
 
 class ResultSetIterator:

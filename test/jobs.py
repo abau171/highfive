@@ -4,6 +4,90 @@ import unittest
 import highfive.jobs as jobs
 
 
+class TestResultSet(unittest.TestCase):
+
+    def setUp(self):
+
+        self._loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(None)
+
+    def test_no_results(self):
+        """
+        Ensures that a new result set has no results and is incomplete, then
+        ensures that completion of an empty result set works.
+        """
+
+        rs = jobs.ResultSet(loop=self._loop)
+
+        self.assertEqual(len(rs), 0)
+        self.assertFalse(rs.is_complete())
+        
+        rs.complete()
+
+        self.assertEqual(len(rs), 0)
+        self.assertTrue(rs.is_complete())
+
+    def test_results(self):
+        """
+        Ensures that a result set can add results, and effectively tracks and
+        returns them before a proper result set completion.
+        """
+
+        rs = jobs.ResultSet(loop=self._loop)
+
+        rs.add(0)
+
+        self.assertEqual(len(rs), 1)
+        self.assertFalse(rs.is_complete())
+
+        rs.add(1)
+        rs.add(2)
+
+        self.assertEqual(len(rs), 3)
+        self.assertFalse(rs.is_complete())
+
+        self.assertEqual(rs[0], 0)
+        self.assertEqual(rs[1], 1)
+        self.assertEqual(rs[2], 2)
+
+        rs.complete()
+
+        self.assertEqual(len(rs), 3)
+        self.assertTrue(rs.is_complete())
+
+    def test_ops_after_complete(self):
+        """
+        Completes a result set, then makes sure new results cannot be added
+        and it cannot be completed again.
+        """
+
+        rs = jobs.ResultSet(loop=self._loop)
+
+        rs.complete()
+
+        with self.assertRaises(RuntimeError):
+            rs.add(0)
+        with self.assertRaises(RuntimeError):
+            rs.complete()
+
+    def test_bad_index(self):
+        """
+        Ensures that fetching a result using an improper index fails.
+        """
+
+        rs = jobs.ResultSet(loop=self._loop)
+
+        rs.add(0)
+        rs.add(1)
+
+        with self.assertRaises(IndexError):
+            rs[2]
+        with self.assertRaises(IndexError):
+            rs[3]
+        with self.assertRaises(IndexError):
+            rs[10]
+
+
 class TestJobSet(unittest.TestCase):
 
     def setUp(self):
