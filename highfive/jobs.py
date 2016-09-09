@@ -1,13 +1,5 @@
+import asyncio
 import collections
-
-
-class Closed(Exception):
-    """
-    Raised when an action cannot be performed because an object has been
-    closed.
-    """
-
-    pass
 
 
 class EndOfResults(Exception):
@@ -140,17 +132,19 @@ class JobSet:
     manager.
     """
 
-    def __init__(self, jobs, *, loop):
-        self._loop = loop
+    def __init__(self, jobs, *, loop=None):
+        self._loop = loop if loop is not None else asyncio.get_event_loop()
         self._jobs = iter(jobs)
         self._on_deck = None
         self._return_queue = collections.deque()
         self._results = ResultSet(loop=self._loop)
         self._active_jobs = 0
-        self._cancelled = False
         self._waiters = []
 
         self._load_job()
+
+        if self._active_jobs == 0:
+            self._done()
 
     def _load_job(self):
         """
@@ -170,19 +164,15 @@ class JobSet:
         jobs are available to be run.
         """
 
-        if self._cancelled:
-            return False
-
-        return len(self._return_queue) > 0 or self._on_deck is not None
+        return (
+            (self._return_queue is not None and len(self._return_queue) > 0)
+            or self._on_deck is not None)
 
     def is_done(self):
         """
         Indicates whether the job set is done executing. This can mean either
         every job has been run successfully or the job set has been cancelled.
         """
-
-        if self._cancelled:
-            return True
 
         return self._active_jobs == 0
 
@@ -193,15 +183,14 @@ class JobSet:
         job can be obtained with this method.
         """
 
-        if self._cancelled:
-            raise Closed
-
         if len(self._return_queue) > 0:
             return self._return_queue.popleft()
-        else:
+        elif self._on_deck is not None:
             job = self._on_deck
             self._load_job()
             return job
+        else:
+            raise IndexError("no jobs available")
 
     def return_job(self, job):
         """
@@ -210,8 +199,9 @@ class JobSet:
         already been cancelled, raises a Closed exception.
         """
 
-        if self._cancelled:
-            raise Closed
+        if self.is_done():
+            raise RuntimeError("job set is already done, no more jobs may be "
+                             + "returned")
 
         self._return_queue.append(job)
 
@@ -222,8 +212,9 @@ class JobSet:
         job set has been closed will result in a Closed exception being raised.
         """
 
-        if self._cancelled:
-            raise Closed
+        if self.is_done():
+            raise RuntimeError("job set is already done, no more results may "
+                             + "be added")
 
         self._results.add(result)
         self._active_jobs -= 1
@@ -243,15 +234,16 @@ class JobSet:
         no more results will be accepted.
         """
 
-        if not self.is_done():
-            self._cancelled = True
+        if self.is_done():
+            raise RuntimeError("job set is already done, it cannot be "
+                             + "cancelled")
 
-            self._jobs = None
-            self._on_deck = None
-            self._return_queue = None
-            self._active_jobs = 0
+        self._jobs = None
+        self._on_deck = None
+        self._return_queue = None
+        self._active_jobs = 0
 
-            self._done()
+        self._done()
 
     def _done(self):
         """

@@ -30,5 +30,6 @@ setup(
         "Topic :: Software Development",
         "Topic :: System :: Distributed Computing",
     ],
+    test_suite = "test",
 )
 
