@@ -87,6 +87,43 @@ class TestResultSet(unittest.TestCase):
         with self.assertRaises(IndexError):
             rs[10]
 
+    def test_wait_complete(self):
+        """
+        Ensures that the completion of a result set invokes a change, and that
+        all future attempts to wait for a change return immediately.
+        """
+
+        rs = jobs.ResultSet(loop=self._loop)
+
+        async def completer():
+            rs.complete()
+
+        async def waiter():
+            c = self._loop.create_task(completer())
+            await rs.wait_changed()
+            self.assertTrue(rs.is_complete())
+            await rs.wait_changed()
+
+        self._loop.run_until_complete(waiter())
+
+    def test_wait_result_add(self):
+        """
+        Ensures that adding a result invokes a change.
+        """
+
+        rs = jobs.ResultSet(loop=self._loop)
+
+        async def adder():
+            rs.add(None)
+
+        async def waiter():
+            c = self._loop.create_task(adder())
+            await rs.wait_changed()
+            self.assertEqual(len(rs), 1)
+            self.assertFalse(rs.is_complete())
+
+        self._loop.run_until_complete(waiter())
+
 
 class TestJobSet(unittest.TestCase):
 
@@ -242,6 +279,26 @@ class TestJobSet(unittest.TestCase):
 
         self.assertTrue(js.is_done())
         self.assertFalse(js.job_available())
+
+    def test_wait_done(self):
+        """
+        Ensures that waiting on the completion of a job set works whether the
+        job set is running or already complete.
+        """
+
+        js = jobs.JobSet(range(1), loop=self._loop)
+
+        async def completer():
+            job = js.get_job()
+            js.add_result(None)
+
+        async def waiter():
+            c = self._loop.create_task(completer())
+            await js.wait_done()
+            self.assertTrue(js.is_done())
+            await js.wait_done()
+
+        self._loop.run_until_complete(waiter())
 
 
 if __name__ == "__main__":
