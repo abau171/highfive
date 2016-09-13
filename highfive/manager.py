@@ -1,7 +1,7 @@
 import asyncio
 import collections
 
-import jobs
+from . import jobs
 
 
 class JobManager:
@@ -72,6 +72,12 @@ class JobManager:
             if self._closing:
                 self._close()
 
+    def _close(self):
+        waiters = self._waiters
+        self._waiters = None
+        for waiter in waiters:
+            waiter.set_result(None)
+
     def add_worker(self, worker):
         if self._closing:
             worker.close()
@@ -93,16 +99,11 @@ class JobManager:
         for worker in self._ready:
             worker.close()
         self._ready = None
-        self._active_js.cancel()
+        if self._active_js is not None:
+            self._active_js.cancel()
         for js in self._js_queue:
             js.cancel()
         self._js_queue = None
-
-    def _close(self):
-        waiters = self._waiters
-        self._waiters = None
-        for waiter in waiters:
-            waiter.set_result(None)
 
     async def wait_closed(self):
         if not self._closing or self._active_js is not None:
