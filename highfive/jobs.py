@@ -52,6 +52,10 @@ class ResultSet:
 
         return self._results[i]
 
+    async def __aiter__(self):
+
+        return ResultSetIterator(self)
+
     def _change(self):
         """
         Called when a state change has occurred. Waiters are notified that a
@@ -113,16 +117,16 @@ class ResultSetIterator:
         self._results = results
         self._i = 0
 
-    async def next_result(self):
+    async def __anext__(self):
 
         if self._i >= len(self._results):
             if self._results.is_complete():
-                raise EndOfResults
+                raise StopAsyncIteration
             else:
                 await self._results.wait_changed()
 
         if self._i >= len(self._results):
-            raise EndOfResults
+            raise StopAsyncIteration
         else:
             result = self._results[self._i]
             self._i += 1

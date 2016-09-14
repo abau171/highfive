@@ -23,14 +23,9 @@ async def main(loop):
 
     master = await highfive.start_master(loop=loop)
 
-    js = master.add_job_set(AddJob(i, i * i) for i in range(10))
-    ri = highfive.ResultSetIterator(js.results())
-    try:
-        while True:
-            a, b, c = await ri.next_result()
-            print("{} + {} = {}".format(a, b, c))
-    except highfive.EndOfResults:
-        pass
+    js = master.add_job_set(AddJob(i, i * i) for i in range(30))
+    async for a, b, c in js.results():
+        print("{} + {} = {}".format(a, b, c))
 
     master.close()
     await master.wait_closed()
