@@ -154,6 +154,16 @@ class JobSet:
         if self._active_jobs == 0:
             self._done()
 
+    async def __aenter__(self):
+
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+
+        if not self.is_done():
+            self.cancel()
+            await self.wait_done()
+
     def _load_job(self):
         """
         Loads a job from the job iterator and increments the active job count

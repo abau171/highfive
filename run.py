@@ -21,14 +21,19 @@ class AddJob(highfive.Job):
 
 async def main(loop):
 
-    master = await highfive.start_master(loop=loop)
+    async with await highfive.start_master(loop=loop) as master:
 
-    js = master.add_job_set(AddJob(i, i * i) for i in range(30))
-    async for a, b, c in js.results():
-        print("{} + {} = {}".format(a, b, c))
+        async with master.add_job_set(
+                AddJob(i, i * i) for i in range(10, 20)) as js:
+            async for a, b, c in js.results():
+                print("{} + {} = {}".format(a, b, c))
+                if a == 15:
+                    break
 
-    master.close()
-    await master.wait_closed()
+        async with master.add_job_set(
+                AddJob(i, i * i) for i in range(10)) as js:
+            async for a, b, c in js.results():
+                print("{} + {} = {}".format(a, b, c))
 
 
 if __name__ == "__main__":

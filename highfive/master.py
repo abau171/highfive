@@ -14,6 +14,15 @@ class Master:
         self._server = None
         self._manager = None
 
+    async def __aenter__(self):
+
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+
+        self.close()
+        await self.wait_closed()
+
     async def start(self):
 
         self._manager = manager.JobManager(loop=self._loop)

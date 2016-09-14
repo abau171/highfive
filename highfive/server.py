@@ -19,7 +19,6 @@ class RemoteWorker:
         response_json = response_encoded.decode("utf-8")
         response = json.loads(response_json)
 
-        print("RESPONSE: ", response)
         return response
 
     def close(self):
