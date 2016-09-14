@@ -1,73 +1,48 @@
-import random
 import asyncio
 
-import jobs
-import manager
+from . import jobs
+from . import manager
+from . import server
 
 
-class AddJob(jobs.Job):
-    def __init__(self, a, b):
-        self._a = a
-        self._b = b
-    def get_call(self):
-        #print("GET: {} + {}".format(self._a, self._b))
-        return [self._a, self._b]
-    def get_result(self, response):
-        #print("RESULT: {}".format(response))
-        return self._a, self._b, response
+class Master:
 
+    def __init__(self, *, loop):
 
-class AddWorker:
-    def __init__(self, loop):
         self._loop = loop
-    async def make_call(self, call):
-        await asyncio.sleep(random.random(), loop=self._loop)
-        #print("WORKER: {} + {} = {}".format(call[0], call[1], call[0] + call[1]))
-        return call[0] + call[1]
+
+        self._server = None
+        self._manager = None
+
+    async def start(self):
+
+        self._manager = manager.JobManager(loop=self._loop)
+        self._server = await server.start_server(self._manager, loop=self._loop)
+
     def close(self):
-        pass
+
+        self._server.close()
+        self._manager.close()
+
+    async def wait_closed(self):
+
+        await self._server.wait_closed()
+        await self._manager.wait_closed()
+
+    def add_job_set(self, job_iterable):
+
+        js = jobs.JobSet(job_iterable, loop=self._loop)
+        self._manager.add_job_set(js)
+        return js
 
 
-async def main(loop):
+async def start_master(*, loop=None):
 
-    m = manager.JobManager(loop=loop)
+    if loop is None:
+        loop = asyncio.get_event_loop()
 
-    js = jobs.JobSet((AddJob(i, i * i) for i in range(10)), loop=loop)
-    ri = jobs.ResultSetIterator(js.results())
-    m.add_job_set(js)
+    master = Master(loop=loop)
+    await master.start()
 
-    m.add_worker(AddWorker(loop))
-    m.add_worker(AddWorker(loop))
-
-    try:
-        while True:
-            a, b, c = await ri.next_result()
-            print("{} + {} = {}".format(a, b, c))
-            if a == 5:
-                js.cancel()
-    except jobs.EndOfResults:
-        pass
-
-    js = jobs.JobSet((AddJob(i, i * i) for i in range(10)), loop=loop)
-    ri = jobs.ResultSetIterator(js.results())
-    m.add_job_set(js)
-    js2 = jobs.JobSet((AddJob(i, i * i) for i in range(10)), loop=loop)
-    m.add_job_set(js2)
-
-    try:
-        while True:
-            a, b, c = await ri.next_result()
-            print("{} + {} = {}".format(a, b, c))
-            if a == 5:
-                m.close()
-    except jobs.EndOfResults:
-        pass
-
-    await m.wait_closed()
-
-
-loop = asyncio.get_event_loop()
-asyncio.set_event_loop(None)
-loop.run_until_complete(main(loop))
-loop.close()
+    return master
 

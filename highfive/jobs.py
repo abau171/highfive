@@ -136,8 +136,8 @@ class JobSet:
     manager.
     """
 
-    def __init__(self, jobs, *, loop=None):
-        self._loop = loop if loop is not None else asyncio.get_event_loop()
+    def __init__(self, jobs, *, loop):
+        self._loop = loop
         self._jobs = iter(jobs)
         self._on_deck = None
         self._return_queue = collections.deque()
