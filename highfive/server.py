@@ -28,8 +28,10 @@ class RemoteWorker:
 
 class Server:
 
-    def __init__(self, manager, *, loop):
+    def __init__(self, host, port, manager, *, loop):
 
+        self._host = host
+        self._port = port
         self._manager = manager
         self._loop = loop
 
@@ -43,7 +45,7 @@ class Server:
     async def start(self):
 
         self._server = await asyncio.start_server(
-            self._accept, host="", port=48484, loop=self._loop)
+            self._accept, host=self._host, port=self._port, loop=self._loop)
 
     def close(self):
 
@@ -54,9 +56,9 @@ class Server:
         await self._server.wait_closed()
 
 
-async def start_server(manager, *, loop):
+async def start_server(host, port, manager, *, loop):
 
-    s = Server(manager, loop=loop)
+    s = Server(host, port, manager, loop=loop)
     await s.start()
     return s
 

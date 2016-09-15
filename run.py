@@ -21,7 +21,8 @@ class AddJob(highfive.Job):
 
 async def main(loop):
 
-    async with await highfive.start_master(loop=loop) as master:
+    async with await highfive.start_master(
+            "localhost", 48483, loop=loop) as master:
 
         async with master.add_job_set(
                 AddJob(i, i * i) for i in range(10, 20)) as js:

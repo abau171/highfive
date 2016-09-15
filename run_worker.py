@@ -3,7 +3,7 @@ import json
 import random
 
 async def main():
-    reader, writer = await asyncio.open_connection("localhost", 48484)
+    reader, writer = await asyncio.open_connection("localhost", 48483)
     try:
         while True:
             a, b = json.loads((await reader.readline()).decode("utf-8"))

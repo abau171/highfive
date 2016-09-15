@@ -7,8 +7,10 @@ from . import server
 
 class Master:
 
-    def __init__(self, *, loop):
+    def __init__(self, host, port, *, loop):
 
+        self._host = host
+        self._port = port
         self._loop = loop
 
         self._server = None
@@ -26,7 +28,8 @@ class Master:
     async def start(self):
 
         self._manager = manager.JobManager(loop=self._loop)
-        self._server = await server.start_server(self._manager, loop=self._loop)
+        self._server = await server.start_server(
+            self._host, self._port, self._manager, loop=self._loop)
 
     def close(self):
 
@@ -45,12 +48,12 @@ class Master:
         return js
 
 
-async def start_master(*, loop=None):
+async def start_master(host="", port=48484, *, loop=None):
 
     if loop is None:
         loop = asyncio.get_event_loop()
 
-    master = Master(loop=loop)
+    master = Master(host, port, loop=loop)
     await master.start()
 
     return master
