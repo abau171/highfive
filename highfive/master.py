@@ -7,17 +7,21 @@ from . import server
 
 class Master:
 
-    def __init__(self, host, port, *, loop):
+    def __init__(self, host="", port=48484, *, loop=None):
 
         self._host = host
         self._port = port
-        self._loop = loop
+        if loop is None:
+            self._loop = asyncio.get_event_loop()
+        else:
+            self._loop = loop
 
         self._server = None
         self._manager = None
 
     async def __aenter__(self):
 
+        await self.start()
         return self
 
     async def __aexit__(self, exc_type, exc, tb):
@@ -41,20 +45,9 @@ class Master:
         await self._server.wait_closed()
         await self._manager.wait_closed()
 
-    def add_job_set(self, job_iterable):
+    def run(self, job_iterable):
 
         js = jobs.JobSet(job_iterable, loop=self._loop)
         self._manager.add_job_set(js)
         return js
-
-
-async def start_master(host="", port=48484, *, loop=None):
-
-    if loop is None:
-        loop = asyncio.get_event_loop()
-
-    master = Master(host, port, loop=loop)
-    await master.start()
-
-    return master
 
