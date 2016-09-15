@@ -23,17 +23,17 @@ async def main(loop):
 
     async with await highfive.start_master(loop=loop) as master:
 
-        async with master.add_job_set(
-                AddJob(i, i * i) for i in range(100, 200)) as js:
+        jobs = (AddJob(i, i * i) for i in range(100, 200))
+        async with master.add_job_set(jobs) as js:
             async for a, b, c in js.results():
                 print("{} + {} = {}".format(a, b, c))
                 if a == 150:
                     break
 
-        async with master.add_job_set(
-                AddJob(i, i * i) for i in range(100)) as js:
-            async for a, b, c in js.results():
-                print("{} + {} = {}".format(a, b, c))
+        jobs = ([i, i * i] for i in range(100))
+        async with master.add_job_set(jobs) as js:
+            async for c in js.results():
+                print(c)
 
 
 if __name__ == "__main__":

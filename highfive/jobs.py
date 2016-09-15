@@ -23,6 +23,21 @@ class Job:
         pass
 
 
+class DefaultJob(Job):
+
+    def __init__(self, call):
+
+        self._call = call
+
+    def get_call(self):
+
+        return self._call
+
+    def get_result(self, response):
+
+        return response
+
+
 class ResultSet:
     """
     A set of job results from a single job set.
@@ -167,7 +182,10 @@ class JobSet:
         """
 
         try:
-            self._on_deck = next(self._jobs)
+            next_job = next(self._jobs)
+            if not isinstance(next_job, Job):
+                next_job = DefaultJob(next_job)
+            self._on_deck = next_job
             self._active_jobs += 1
         except StopIteration:
             self._on_deck = None
