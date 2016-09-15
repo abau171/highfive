@@ -156,8 +156,8 @@ class TestResultSetIterator(unittest.TestCase):
         ri = jobs.ResultSetIterator(rs)
 
         async def nexter():
-            with self.assertRaises(jobs.EndOfResults):
-                await ri.next_result()
+            with self.assertRaises(StopAsyncIteration):
+                await ri.__anext__()
 
         self._loop.run_until_complete(nexter())
 
@@ -179,15 +179,23 @@ class TestResultSetIterator(unittest.TestCase):
             rs.complete()
 
         async def nexter():
-            await ri.next_result()
+            await ri.__anext__()
             self._loop.create_task(add_completer())
-            await ri.next_result()
-            with self.assertRaises(jobs.EndOfResults):
-                await ri.next_result()
+            await ri.__anext__()
+            with self.assertRaises(StopAsyncIteration):
+                await ri.__anext__()
 
         self._loop.run_until_complete(nexter())
 
         self._loop.close()
+
+
+async def acount(aiterator):
+
+    c = 0
+    async for _ in aiterator:
+        c += 1
+    return c
 
 
 class TestJobSet(unittest.TestCase):
@@ -209,8 +217,7 @@ class TestJobSet(unittest.TestCase):
         self.assertFalse(js.job_available())
         with self.assertRaises(IndexError):
             js.get_job()
-        self.assertTrue(js.results().is_complete())
-        self.assertEqual(len(js.results()), 0)
+        self.assertEqual(self._loop.run_until_complete(acount(js.results())), 0)
 
     def test_one_job(self):
         """
@@ -233,8 +240,7 @@ class TestJobSet(unittest.TestCase):
 
         self.assertTrue(js.is_done())
         self.assertFalse(js.job_available())
-        self.assertTrue(js.results().is_complete())
-        self.assertEqual(len(js.results()), 1)
+        self.assertEqual(self._loop.run_until_complete(acount(js.results())), 1)
 
         self._loop.close()
 
@@ -264,8 +270,7 @@ class TestJobSet(unittest.TestCase):
 
         self.assertTrue(js.is_done())
         self.assertFalse(js.job_available())
-        self.assertTrue(js.results().is_complete())
-        self.assertEqual(len(js.results()), 1)
+        self.assertEqual(self._loop.run_until_complete(acount(js.results())), 1)
 
         self._loop.close()
 
@@ -311,8 +316,7 @@ class TestJobSet(unittest.TestCase):
 
         self.assertTrue(js.is_done())
         self.assertFalse(js.job_available())
-        self.assertTrue(js.results().is_complete())
-        self.assertEqual(len(js.results()), 3)
+        self.assertEqual(self._loop.run_until_complete(acount(js.results())), 3)
 
         self._loop.close()
 

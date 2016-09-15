@@ -2,10 +2,6 @@ import asyncio
 import collections
 
 
-class EndOfResults(Exception):
-    pass
-
-
 class Job:
     """
     Abstract class for distributable jobs.
@@ -51,10 +47,6 @@ class ResultSet:
         """
 
         return self._results[i]
-
-    async def __aiter__(self):
-
-        return ResultSetIterator(self)
 
     def _change(self):
         """
@@ -116,6 +108,10 @@ class ResultSetIterator:
 
         self._results = results
         self._i = 0
+
+    async def __aiter__(self):
+
+        return self
 
     async def __anext__(self):
 
@@ -255,7 +251,7 @@ class JobSet:
         Gets the result set belonging to the job set.
         """
 
-        return self._results
+        return ResultSetIterator(self._results)
 
     def cancel(self):
         """
