@@ -19,24 +19,29 @@ class AddJob(highfive.Job):
         return (self._a, self._b, response)
 
 
-def main():
+async def main(loop):
 
-    with highfive.MasterDaemon() as master:
+    async with highfive.Master(loop=loop) as master:
 
         jobs = (AddJob(i, i * i) for i in range(100, 200))
-        with master.run(jobs) as js:
-            for a, b, c in js.results():
+        async with master.run(jobs) as js:
+            async for a, b, c in js.results():
                 print("{} + {} = {}".format(a, b, c))
                 if a == 150:
                     break
 
         jobs = ([i, i * i] for i in range(100))
         js = master.run(jobs)
-        for c in js.results():
+        async for c in js.results():
             print(c)
 
 
 if __name__ == "__main__":
 
-    main()
+    loop = asyncio.get_event_loop()
+    asyncio.set_event_loop(None)
+
+    loop.run_until_complete(main(loop))
+
+    loop.close()
 
