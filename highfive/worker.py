@@ -5,19 +5,32 @@ import json
 
 async def handle_jobs(job_handler, host, port, *, loop):
 
-    reader, writer = await asyncio.open_connection(host, port, loop=loop)
+    try:
 
-    while True:
+        try:
+            reader, writer = await asyncio.open_connection(host, port, loop=loop)
+        except OSError:
+            print("worker could not connect")
+            return
 
-        call_encoded = await reader.readline()
-        call_json = call_encoded.decode("utf-8")
-        call = json.loads(call_json)
+        while True:
 
-        response = job_handler(call)
+            try:
+                call_encoded = await reader.readuntil(b"\n")
+            except asyncio.IncompleteReadError:
+                break
+            call_json = call_encoded.decode("utf-8")
+            call = json.loads(call_json)
 
-        response_json = json.dumps(response) + "\n"
-        response_encoded = response_json.encode("utf-8")
-        writer.write(response_encoded)
+            response = job_handler(call)
+
+            response_json = json.dumps(response) + "\n"
+            response_encoded = response_json.encode("utf-8")
+            writer.write(response_encoded)
+
+    except KeyboardInterrupt:
+
+        pass
 
 
 def worker_main(job_handler, host, port):
