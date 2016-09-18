@@ -1,8 +1,12 @@
 import asyncio
+import logging
 
 from . import jobs
 from . import manager
 from . import server
+
+
+logger = logging.getLogger(__name__)
 
 
 class Master:
@@ -34,11 +38,13 @@ class Master:
         self._manager = manager.JobManager(loop=self._loop)
         self._server = await server.start_server(
             self._host, self._port, self._manager, loop=self._loop)
+        logging.debug("HighFive master started")
 
     def close(self):
 
         self._server.close()
         self._manager.close()
+        logging.debug("HighFive master closed")
 
     async def wait_closed(self):
 

@@ -1,7 +1,11 @@
 import asyncio
 import collections
+import logging
 
 from . import jobs
+
+
+logger = logging.getLogger(__name__)
 
 
 class JobManager:
@@ -30,11 +34,13 @@ class JobManager:
             response = await worker.make_call(call)
             result = job.get_result(response)
         except Exception:
+            logger.debug("worker could not finish job, closing")
             del self._running[worker]
             worker.close()
             if not self._active_js.is_done():
                 self._active_js.return_job(job)
         else:
+            logger.debug("worker finished job")
             del self._running[worker]
             if not self._closing:
                 self._assign(worker)
@@ -43,12 +49,15 @@ class JobManager:
 
     def _assign(self, worker):
         if self._active_js is not None and self._active_js.job_available():
+            logging.debug("worker found job")
             job = self._active_js.get_job()
             self._running[worker] = self._loop.create_task(self._run_job(worker, job))
         else:
+            logging.debug("worker found no job, added to ready queue")
             self._ready.append(worker)
 
     def _activate(self, js):
+        logger.debug("running next job set")
         self._active_js = js
         self._active_task = self._loop.create_task(self._run_active_js())
         self._running = dict()
@@ -62,6 +71,7 @@ class JobManager:
         tasks = self._running.values()
         if len(tasks) > 0:
             await asyncio.wait(tasks, loop=self._loop)
+        logger.debug("job set complete")
         if not self._closing and len(self._js_queue) > 0:
             next_js = self._js_queue.pop()
             self._activate(next_js)
@@ -80,13 +90,16 @@ class JobManager:
 
     def add_worker(self, worker):
         if self._closing:
+            logger.debug("attempted to add worker during close")
             worker.close()
         else:
+            logger.debug("worker added")
             self._assign(worker)
 
     def add_job_set(self, js):
         if self._closing:
             raise Exception("job set can't be added: manager is closing")
+        logger.debug("job set added")
         if self._active_js is None:
             self._activate(js)
         else:

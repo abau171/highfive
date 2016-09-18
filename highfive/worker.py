@@ -1,6 +1,10 @@
 import asyncio
 import multiprocessing
 import json
+import logging
+
+
+logger = logging.getLogger(__name__)
 
 
 async def handle_jobs(job_handler, host, port, *, loop):
@@ -10,7 +14,7 @@ async def handle_jobs(job_handler, host, port, *, loop):
         try:
             reader, writer = await asyncio.open_connection(host, port, loop=loop)
         except OSError:
-            print("worker could not connect")
+            logging.error("worker could not connect to server")
             return
 
         while True:
@@ -19,6 +23,7 @@ async def handle_jobs(job_handler, host, port, *, loop):
                 call_encoded = await reader.readuntil(b"\n")
             except asyncio.IncompleteReadError:
                 break
+            logging.debug("worker got call")
             call_json = call_encoded.decode("utf-8")
             call = json.loads(call_json)
 
@@ -27,6 +32,7 @@ async def handle_jobs(job_handler, host, port, *, loop):
             response_json = json.dumps(response) + "\n"
             response_encoded = response_json.encode("utf-8")
             writer.write(response_encoded)
+            logging.debug("worker returned response")
 
     except KeyboardInterrupt:
 
@@ -53,6 +59,10 @@ def run_worker_pool(job_handler, host="localhost", port=48484,
         p.start()
         processes.append(p)
 
+    logger.debug("workers started")
+
     for p in processes:
         p.join()
+
+    logger.debug("all workers completed")
 
