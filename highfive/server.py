@@ -15,7 +15,7 @@ class RemoteWorker:
         call_encoded = call_json.encode("utf-8")
         self._writer.write(call_encoded)
 
-        response_encoded = await self._reader.readline()
+        response_encoded = await self._reader.readuntil(b"\n")
         response_json = response_encoded.decode("utf-8")
         response = json.loads(response_json)
 
