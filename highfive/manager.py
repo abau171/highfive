@@ -109,14 +109,17 @@ class JobManager:
         if self._closing:
             return
         self._closing = True
-        for worker in self._ready:
-            worker.close()
-        self._ready = None
-        if self._active_js is not None and not self._active_js.is_done():
-            self._active_js.cancel()
         for js in self._js_queue:
             js.cancel()
         self._js_queue = None
+        for worker in self._ready:
+            worker.close()
+        self._ready = None
+        if self._active_js is not None:
+            if not self._active_js.is_done():
+                self._active_js.cancel()
+        else:
+            self._close()
 
     async def wait_closed(self):
         if not self._closing or self._active_js is not None:
