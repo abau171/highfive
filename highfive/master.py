@@ -35,6 +35,9 @@ class Master:
 
     async def start(self):
 
+        if self._server is not None:
+            raise Exception("master has already been started")
+
         self._manager = manager.JobManager(loop=self._loop)
         self._server = await server.start_server(
             self._host, self._port, self._manager, loop=self._loop)
