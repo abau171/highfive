@@ -26,39 +26,12 @@ class RemoteWorker:
         self._writer.close()
 
 
-class Server:
-
-    def __init__(self, host, port, manager, *, loop):
-
-        self._host = host
-        self._port = port
-        self._manager = manager
-        self._loop = loop
-
-        self._server = None
-
-    def _accept(self, reader, writer):
-
-        worker = RemoteWorker(reader, writer)
-        self._manager.add_worker(worker)
-
-    async def start(self):
-
-        self._server = await asyncio.start_server(
-            self._accept, host=self._host, port=self._port, loop=self._loop)
-
-    def close(self):
-
-        self._server.close()
-
-    async def wait_closed(self):
-
-        await self._server.wait_closed()
-
-
 async def start_server(host, port, manager, *, loop):
 
-    s = Server(host, port, manager, loop=loop)
-    await s.start()
+    def accept(reader, writer):
+        worker = RemoteWorker(reader, writer)
+        manager.add_worker(worker)
+
+    s = await asyncio.start_server(accept, host=host, port=port, loop=loop)
     return s
 
