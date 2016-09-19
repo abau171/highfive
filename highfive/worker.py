@@ -44,6 +44,7 @@ def worker_main(job_handler, host, port):
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(None)
     loop.run_until_complete(handle_jobs(job_handler, host, port, loop=loop))
+    loop.close()
 
 
 def run_worker_pool(job_handler, host="localhost", port=48484,
