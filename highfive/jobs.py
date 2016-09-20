@@ -42,7 +42,7 @@ class DefaultJob(Job):
         return response
 
 
-class ResultSet:
+class Results:
     """
     A set of job results from a single job set.
     """
@@ -54,18 +54,16 @@ class ResultSet:
         self._waiters = []
 
     def __len__(self):
-        """
-        The number of results currently available.
-        """
 
         return len(self._results)
 
     def __getitem__(self, i):
-        """
-        Gets the ith result if it exists.
-        """
 
         return self._results[i]
+
+    async def __aiter__(self):
+
+        return ResultsIterator(self)
 
     def _change(self):
         """
@@ -83,8 +81,7 @@ class ResultSet:
         Adds a new result.
         """
 
-        if self.is_complete():
-            raise RuntimeError("add result when result set complete")
+        assert not self._complete
 
         self._results.append(result)
         self._change()
@@ -95,8 +92,8 @@ class ResultSet:
         added to it in the future.
         """
 
-        if self.is_complete():
-            raise RuntimeError("result set already complete")
+        if self._complete:
+            return
 
         self._complete = True
         self._change()
@@ -111,7 +108,7 @@ class ResultSet:
     async def wait_changed(self):
         """
         Waits until the result set changes. Possible changes can be a result
-        being added or the result set being completed. If the result set is
+        being added or the result set becoming complete. If the result set is
         already completed, this method returns immediately.
         """
 
@@ -121,7 +118,7 @@ class ResultSet:
             await waiter
 
 
-class ResultSetIterator:
+class ResultsIterator:
 
     def __init__(self, results):
 
@@ -155,12 +152,12 @@ class JobSet:
     manager.
     """
 
-    def __init__(self, jobs, *, loop):
+    def __init__(self, jobs, results, *, loop):
         self._loop = loop
         self._jobs = iter(jobs)
         self._return_queue = collections.deque()
         self._active_jobs = 0
-        self._results = ResultSet(loop=self._loop)
+        self._results = results
 
         self._waiters = []
 
@@ -252,15 +249,6 @@ class JobSet:
         self._active_jobs -= 1
         if self._active_jobs == 0:
             self._done()
-
-    def results(self):
-        """
-        Returns an iterator over the result list. Each iteration may block
-        until a new result becomes available or the end of the result list is
-        discovered.
-        """
-
-        return ResultSetIterator(self._results)
 
     def cancel(self):
         """

@@ -12,7 +12,8 @@ async def start_master(host="", port=48484, *, loop=None):
 
     loop = loop if loop is not None else asyncio.get_event_loop()
 
-    js = jobs.JobSet(range(10), loop=loop)
+    results = jobs.Results(loop=loop)
+    js = jobs.JobSet(range(10), results, loop=loop)
     server = await loop.create_server(
             lambda: WorkerProtocol(js), host, port)
     return Master(server, loop=loop)

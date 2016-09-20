@@ -4,7 +4,7 @@ import unittest
 import highfive.jobs as jobs
 
 
-class TestResultSet(unittest.TestCase):
+class TestResults(unittest.TestCase):
 
     def setUp(self):
 
@@ -17,7 +17,7 @@ class TestResultSet(unittest.TestCase):
         ensures that completion of an empty result set works.
         """
 
-        rs = jobs.ResultSet(loop=self._loop)
+        rs = jobs.Results(loop=self._loop)
 
         self.assertEqual(len(rs), 0)
         self.assertFalse(rs.is_complete())
@@ -35,7 +35,7 @@ class TestResultSet(unittest.TestCase):
         returns them before a proper result set completion.
         """
 
-        rs = jobs.ResultSet(loop=self._loop)
+        rs = jobs.Results(loop=self._loop)
 
         rs.add(0)
 
@@ -65,14 +65,12 @@ class TestResultSet(unittest.TestCase):
         and it cannot be completed again.
         """
 
-        rs = jobs.ResultSet(loop=self._loop)
+        rs = jobs.Results(loop=self._loop)
 
         rs.complete()
 
-        with self.assertRaises(RuntimeError):
+        with self.assertRaises(AssertionError):
             rs.add(0)
-        with self.assertRaises(RuntimeError):
-            rs.complete()
 
         self._loop.close()
 
@@ -81,7 +79,7 @@ class TestResultSet(unittest.TestCase):
         Ensures that fetching a result using an improper index fails.
         """
 
-        rs = jobs.ResultSet(loop=self._loop)
+        rs = jobs.Results(loop=self._loop)
 
         rs.add(0)
         rs.add(1)
@@ -101,7 +99,7 @@ class TestResultSet(unittest.TestCase):
         all future attempts to wait for a change return immediately.
         """
 
-        rs = jobs.ResultSet(loop=self._loop)
+        rs = jobs.Results(loop=self._loop)
 
         async def completer():
             rs.complete()
@@ -121,7 +119,7 @@ class TestResultSet(unittest.TestCase):
         Ensures that adding a result invokes a change.
         """
 
-        rs = jobs.ResultSet(loop=self._loop)
+        rs = jobs.Results(loop=self._loop)
 
         async def adder():
             rs.add(None)
@@ -137,7 +135,7 @@ class TestResultSet(unittest.TestCase):
         self._loop.close()
 
 
-class TestResultSetIterator(unittest.TestCase):
+class TestResultsIterator(unittest.TestCase):
 
     def setUp(self):
 
@@ -150,10 +148,10 @@ class TestResultSetIterator(unittest.TestCase):
         indicates the end of results when waited on.
         """
 
-        rs = jobs.ResultSet(loop=self._loop)
+        rs = jobs.Results(loop=self._loop)
         rs.complete()
 
-        ri = jobs.ResultSetIterator(rs)
+        ri = jobs.ResultsIterator(rs)
 
         async def nexter():
             with self.assertRaises(StopAsyncIteration):
@@ -169,10 +167,10 @@ class TestResultSetIterator(unittest.TestCase):
         results are currently available or not.
         """
 
-        rs = jobs.ResultSet(loop=self._loop)
+        rs = jobs.Results(loop=self._loop)
         rs.add(0)
 
-        ri = jobs.ResultSetIterator(rs)
+        ri = jobs.ResultsIterator(rs)
 
         async def add_completer():
             rs.add(1)
@@ -211,13 +209,16 @@ class TestJobSet(unittest.TestCase):
         treated as a fully finished job set.
         """
 
-        js = jobs.JobSet(range(0), loop=self._loop)
+        results = jobs.Results(loop=self._loop)
+        js = jobs.JobSet(range(0), results, loop=self._loop)
 
         self.assertTrue(js.is_done())
         self.assertFalse(js.job_available())
         with self.assertRaises(IndexError):
             js.get_job()
-        self.assertEqual(self._loop.run_until_complete(acount(js.results())), 0)
+        self.assertEqual(self._loop.run_until_complete(acount(results)), 0)
+
+        self._loop.close()
 
     def test_one_job(self):
         """
@@ -226,7 +227,8 @@ class TestJobSet(unittest.TestCase):
         leaves the job set in a finished state.
         """
 
-        js = jobs.JobSet(range(1), loop=self._loop)
+        results = jobs.Results(loop=self._loop)
+        js = jobs.JobSet(range(1), results, loop=self._loop)
 
         self.assertFalse(js.is_done())
         self.assertTrue(js.job_available())
@@ -240,7 +242,7 @@ class TestJobSet(unittest.TestCase):
 
         self.assertTrue(js.is_done())
         self.assertFalse(js.job_available())
-        self.assertEqual(self._loop.run_until_complete(acount(js.results())), 1)
+        self.assertEqual(self._loop.run_until_complete(acount(results)), 1)
 
         self._loop.close()
 
@@ -253,7 +255,8 @@ class TestJobSet(unittest.TestCase):
         leaves the job set in a finished state.
         """
 
-        js = jobs.JobSet(range(1), loop=self._loop)
+        results = jobs.Results(loop=self._loop)
+        js = jobs.JobSet(range(1), results, loop=self._loop)
 
         job = js.get_job()
         js.return_job(job)
@@ -270,7 +273,7 @@ class TestJobSet(unittest.TestCase):
 
         self.assertTrue(js.is_done())
         self.assertFalse(js.job_available())
-        self.assertEqual(self._loop.run_until_complete(acount(js.results())), 1)
+        self.assertEqual(self._loop.run_until_complete(acount(results)), 1)
 
         self._loop.close()
 
@@ -280,7 +283,8 @@ class TestJobSet(unittest.TestCase):
         execution concurrently.
         """
 
-        js = jobs.JobSet(range(3), loop=self._loop)
+        results = jobs.Results(loop=self._loop)
+        js = jobs.JobSet(range(3), results, loop=self._loop)
 
         self.assertFalse(js.is_done())
         self.assertTrue(js.job_available())
@@ -316,7 +320,7 @@ class TestJobSet(unittest.TestCase):
 
         self.assertTrue(js.is_done())
         self.assertFalse(js.job_available())
-        self.assertEqual(self._loop.run_until_complete(acount(js.results())), 3)
+        self.assertEqual(self._loop.run_until_complete(acount(results)), 3)
 
         self._loop.close()
 
@@ -326,16 +330,14 @@ class TestJobSet(unittest.TestCase):
         cannot be added, and the job can no longer be cancelled.
         """
 
-        js = jobs.JobSet(range(0), loop=self._loop)
+        results = jobs.Results(loop=self._loop)
+        js = jobs.JobSet(range(0), results, loop=self._loop)
 
         js.return_job(None)
         self.assertFalse(js.job_available())
 
         js.add_result(None)
-        self.assertEqual(self._loop.run_until_complete(acount(js.results())), 0)
-
-        with self.assertRaises(RuntimeError):
-            js.cancel()
+        self.assertEqual(self._loop.run_until_complete(acount(results)), 0)
 
         self._loop.close()
 
@@ -345,7 +347,8 @@ class TestJobSet(unittest.TestCase):
         more jobs to be retrieved.
         """
 
-        js = jobs.JobSet(range(3), loop=self._loop)
+        results = jobs.Results(loop=self._loop)
+        js = jobs.JobSet(range(3), results, loop=self._loop)
 
         job1 = js.get_job()
         job2 = js.get_job()
@@ -367,7 +370,8 @@ class TestJobSet(unittest.TestCase):
         job set is running or already complete.
         """
 
-        js = jobs.JobSet(range(1), loop=self._loop)
+        results = jobs.Results(loop=self._loop)
+        js = jobs.JobSet(range(1), results, loop=self._loop)
 
         async def completer():
             job = js.get_job()
