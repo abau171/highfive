@@ -66,16 +66,17 @@ class Worker:
 
     def _load_job(self):
 
-        try:
-            self._job = self._manager.get_job()
-        except IndexError:
-            logger.debug("worker {} could not find a job".format(id(self)))
-            self._job = None
-        else:
-            logger.debug("worker {} found a job".format(id(self)))
-            call_obj = self._job.get_call()
-            call = (json.dumps(call_obj) + "\n").encode("utf-8")
-            self._transport.write(call)
+        self._job = None
+        self._manager.get_job(self._job_loaded)
+
+    def _job_loaded(self, job):
+
+        logger.debug("worker {} found a job".format(id(self)))
+
+        self._job = job
+        call_obj = self._job.get_call()
+        call = (json.dumps(call_obj) + "\n").encode("utf-8")
+        self._transport.write(call)
 
     def response_received(self, response):
 

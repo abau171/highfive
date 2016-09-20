@@ -288,6 +288,7 @@ class JobManager:
         self._loop = loop
         self._active_js = None
         self._job_sources = dict()
+        self._ready_callbacks = collections.deque()
         self._js_queue = collections.deque()
         self._closed = False
 
@@ -311,24 +312,34 @@ class JobManager:
         else:
             return self._active_js.job_available()
 
-    def get_job(self):
+    def get_job(self, callback):
 
         assert not self._closed
 
-        if self._active_js is None:
-            raise IndexError("no active job set")
+        if self._active_js is None or not self._active_js.job_available():
+            self._ready_callbacks.append(callback)
         else:
             job = self._active_js.get_job()
             self._job_sources[job] = self._active_js
-            return job
+            callback(job)
 
     def return_job(self, job):
 
+        if self._closed:
+            return
+
         js = self._job_sources[job]
-        del self._job_sources[job]
-        js.return_job(job)
+        if len(self._ready_callbacks) > 0:
+            callback = self._ready_callbacks.popleft()
+            callback(job)
+        else:
+            del self._job_sources[job]
+            js.return_job(job)
 
     def add_result(self, job, result):
+
+        if self._closed:
+            return
 
         js = self._job_sources[job]
         del self._job_sources[job]
@@ -343,9 +354,16 @@ class JobManager:
 
         try:
             self._active_js = self._js_queue.popleft()
-            self._active_js.set_done_callback(self.active_job_set_done)
         except IndexError:
             self._active_js = None
+        else:
+            self._active_js.set_done_callback(self.active_job_set_done)
+            while (self._active_js.job_available()
+                    and len(self._ready_callbacks) > 0):
+                job = self._active_js.get_job()
+                self._job_sources[job] = self._active_js
+                callback = self._ready_callbacks.popleft()
+                callback(job)
 
     def close(self):
 
