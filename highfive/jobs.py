@@ -12,7 +12,7 @@ class Job:
         Gets a JSON-serializable call object to send to a worker.
         """
 
-        pass
+        raise NotImplementedError
 
     def get_result(self, response):
         """
@@ -20,7 +20,7 @@ class Job:
         a worker.
         """
 
-        pass
+        raise NotImplementedError
 
 
 class DefaultJob(Job):
