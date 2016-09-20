@@ -328,10 +328,12 @@ class TestJobSet(unittest.TestCase):
 
         js = jobs.JobSet(range(0), loop=self._loop)
 
-        with self.assertRaises(RuntimeError):
-            js.return_job(None)
-        with self.assertRaises(RuntimeError):
-            js.add_result(None)
+        js.return_job(None)
+        self.assertFalse(js.job_available())
+
+        js.add_result(None)
+        self.assertEqual(self._loop.run_until_complete(acount(js.results())), 0)
+
         with self.assertRaises(RuntimeError):
             js.cancel()
 
