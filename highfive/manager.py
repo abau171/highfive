@@ -32,7 +32,6 @@ class JobManager:
         call = job.get_call()
         try:
             response = await worker.make_call(call)
-            result = job.get_result(response)
         except Exception:
             logger.debug("worker could not finish job, closing")
             del self._running[worker]
@@ -41,6 +40,7 @@ class JobManager:
                 self._active_js.return_job(job)
         else:
             logger.debug("worker finished job")
+            result = job.get_result(response)
             del self._running[worker]
             if not self._closing:
                 self._assign(worker)
