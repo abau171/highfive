@@ -1,24 +1,36 @@
+import logging
 import json
 import asyncio
 
 from . import jobs
 
 
+logger = logging.getLogger(__name__)
+
+
 async def start_master(host="", port=48484, *, loop=None):
 
     loop = loop if loop is not None else asyncio.get_event_loop()
 
-    server = await loop.create_server(WorkerProtocol, host, port)
+    js = jobs.JobSet(range(10), loop=loop)
+    server = await loop.create_server(
+            lambda: WorkerProtocol(js), host, port)
     return Master(server, loop=loop)
 
 
 class WorkerProtocol(asyncio.Protocol):
 
+    def __init__(self, js):
+
+        self._js = js
+
     def connection_made(self, transport):
+
+        logger.debug("new worker connected")
 
         self._transport = transport
         self._buffer = bytearray()
-        self._worker = Worker()
+        self._worker = Worker(self._transport, self._js)
 
     def data_received(self, data):
 
@@ -38,35 +50,46 @@ class WorkerProtocol(asyncio.Protocol):
 
     def connection_lost(self, exc):
 
+        logger.debug("worker connection lost")
+
         self._worker.close()
 
 
 class Worker:
 
-    def __init__(self):
+    def __init__(self, transport, js):
 
-        self._load_next_job()
+        self._transport = transport
+        self._js = js
 
-    def _load_next_job(self):
+        self._load_job()
 
-        # TODO LOAD JOB PROPERLY
-        self._job = jobs.DefaultJob(None)
+    def _load_job(self):
+
+        try:
+            logger.debug("worker {} found a job".format(id(self)))
+            self._job = self._js.get_job()
+            call_obj = self._job.get_call()
+            call = (json.dumps(call_obj) + "\n").encode("utf-8")
+            self._transport.write(call)
+        except IndexError:
+            logger.debug("worker {} could not find a job".format(id(self)))
+            self._job = None
 
     def response_received(self, response):
 
         assert self._job is not None
 
+        logger.debug("worker {} got response".format(id(self)))
         result = self._job.get_result(response)
-        # TODO REPORT RESULT
+        self._js.add_result(result)
 
-        self._load_next_job()
+        self._load_job()
 
     def close(self):
 
         if self._job is not None:
-
-            # TODO RETURN JOB
-            pass
+            self._js.return_job(self._job)
 
 
 class Master:

@@ -1,6 +1,10 @@
+import logging
 import asyncio
 
 import highfive
+
+
+logging.basicConfig(level=logging.DEBUG)
 
 
 loop = asyncio.get_event_loop()
