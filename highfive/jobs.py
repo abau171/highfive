@@ -287,6 +287,7 @@ class JobManager:
 
         self._loop = loop
         self._active_js = None
+        self._job_sources = dict()
         self._js_queue = collections.deque()
         self._closed = False
 
@@ -317,7 +318,21 @@ class JobManager:
         if self._active_js is None:
             raise IndexError("no active job set")
         else:
-            return self._active_js.get_job(), self._active_js
+            job = self._active_js.get_job()
+            self._job_sources[job] = self._active_js
+            return job
+
+    def return_job(self, job):
+
+        js = self._job_sources[job]
+        del self._job_sources[job]
+        js.return_job(job)
+
+    def add_result(self, job, result):
+
+        js = self._job_sources[job]
+        del self._job_sources[job]
+        js.add_result(result)
 
     def active_job_set_done(self):
 

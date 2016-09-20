@@ -67,11 +67,10 @@ class Worker:
     def _load_job(self):
 
         try:
-            self._job, self._js = self._manager.get_job()
+            self._job = self._manager.get_job()
         except IndexError:
             logger.debug("worker {} could not find a job".format(id(self)))
             self._job = None
-            self._js = None
         else:
             logger.debug("worker {} found a job".format(id(self)))
             call_obj = self._job.get_call()
@@ -84,16 +83,15 @@ class Worker:
 
         logger.debug("worker {} got response".format(id(self)))
         result = self._job.get_result(response)
-        self._js.add_result(result)
+        self._manager.add_result(self._job, result)
 
         self._load_job()
 
     def close(self):
 
         if self._job is not None:
-            self._js.return_job(self._job)
+            self._manager.return_job(self._job)
             self._job = None
-            self._js = None
 
 
 class Master:
