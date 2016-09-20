@@ -160,6 +160,7 @@ class JobSet:
         self._results = results
 
         self._waiters = []
+        self._done_callback = None
 
         self._load_job()
 
@@ -191,6 +192,8 @@ class JobSet:
         waiters = self._waiters
         for waiter in waiters:
             waiter.set_result(None)
+        if self._done_callback is not None:
+            self._done_callback()
 
     def job_available(self):
         """
@@ -273,4 +276,70 @@ class JobSet:
             future = self._loop.create_future()
             self._waiters.append(future)
             await future
+
+    def set_done_callback(self, callback):
+
+        self._done_callback = callback
+
+class JobManager:
+
+    def __init__(self, *, loop):
+
+        self._loop = loop
+        self._active_js = None
+        self._js_queue = collections.deque()
+        self._closed = False
+
+    def add_job_set(self, job_list):
+
+        assert not self._closed
+
+        results = Results(loop=self._loop)
+        js = JobSet(job_list, results, loop=self._loop)
+        if self._active_js is None:
+            self._active_js = js
+            self._active_js.set_done_callback(self.active_job_set_done)
+        else:
+            self._js_queue.append(js)
+        return js, results
+
+    def job_available(self):
+
+        if self._closed or self._active_js is None:
+            return False
+        else:
+            return self._active_js.job_available()
+
+    def get_job(self):
+
+        assert not self._closed
+
+        if self._active_js is None:
+            raise IndexError("no active job set")
+        else:
+            return self._active_js.get_job(), self._active_js
+
+    def active_job_set_done(self):
+
+        assert self._active_js.is_done()
+
+        if self._closed:
+            return
+
+        try:
+            self._active_js = self._js_queue.popleft()
+            self._active_js.set_done_callback(self.active_job_set_done)
+        except IndexError:
+            self._active_js = None
+
+    def close(self):
+
+        if self._closed:
+            return
+
+        self._closed = True
+        if self._active_js is not None:
+            self._active_js.cancel()
+        for js in self._js_queue:
+            js.cancel()
 

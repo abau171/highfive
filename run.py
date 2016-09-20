@@ -9,6 +9,8 @@ logging.basicConfig(level=logging.DEBUG)
 
 loop = asyncio.get_event_loop()
 master = loop.run_until_complete(highfive.start_master())
+master.run(range(5))
+master.run(range(5))
 
 try:
     loop.run_forever()
