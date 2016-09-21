@@ -62,6 +62,8 @@ class Worker:
         self._transport = transport
         self._manager = manager
 
+        self._closed = False
+
         self._load_job()
 
     def _load_job(self):
@@ -72,6 +74,10 @@ class Worker:
     def _job_loaded(self, job):
 
         logger.debug("worker {} found a job".format(id(self)))
+
+        if self._closed:
+            self._manager.return_job(job)
+            return
 
         self._job = job
         call_obj = self._job.get_call()
@@ -89,6 +95,11 @@ class Worker:
         self._load_job()
 
     def close(self):
+
+        if self._closed:
+            return
+
+        self._closed = True
 
         if self._job is not None:
             self._manager.return_job(self._job)
