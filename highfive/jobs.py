@@ -1,4 +1,3 @@
-import asyncio
 import collections
 import logging
 
@@ -146,23 +145,22 @@ class ResultsIterator:
         if self._i >= len(self._results):
 
             # We are at the end of the known results. If the results list is
-            # complete, this is the hard end. Otherwise, we have to wait and
-            # see if the result list will get another result or be completed.
+            # complete, this is the permanent end. Otherwise, we have to wait
+            # for a change. After the change, if the results list is complete,
+            # this is the permanent end, otherwise a new result is available.
 
             if self._results.is_complete():
                 raise StopAsyncIteration
             else:
                 await self._results.wait_changed()
+                if self._results.is_complete():
+                    raise StopAsyncIteration
 
-        # At this point, either the ith result is available or we have reached
-        # the end of the result list.
+        # At this point, the ith result is available
 
-        if self._results.is_complete():
-            raise StopAsyncIteration
-        else:
-            result = self._results[self._i]
-            self._i += 1
-            return result
+        result = self._results[self._i]
+        self._i += 1
+        return result
 
 
 class JobSetHandle:
