@@ -153,7 +153,8 @@ class ResultsIterator:
                 raise StopAsyncIteration
             else:
                 await self._results.wait_changed()
-                if self._results.is_complete():
+                if self._i >= len(self._results):
+                    # no new results, change must be results completion
                     raise StopAsyncIteration
 
         # At this point, the ith result is available
