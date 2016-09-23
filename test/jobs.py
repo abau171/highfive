@@ -216,6 +216,194 @@ class TestJobSet(unittest.TestCase):
         self.assertTrue(js.is_done())
 
 
+class JobGetter:
+
+    def __init__(self):
+        self._job = None
+
+    def callback(self, job):
+        self._job = job
+
+
+class TestJobManager(unittest.TestCase):
+
+    def test_no_js(self):
+
+        m = jobs.JobManager(loop=None)
+
+        self.assertFalse(m.is_closed())
+
+        g = JobGetter()
+        m.get_job(g.callback)
+
+        self.assertIsNone(g._job)
+
+        m.close()
+
+        self.assertTrue(m.is_closed())
+        self.assertIsNone(g._job)
+
+    def test_1_js_1_job(self):
+
+        m = jobs.JobManager(loop=None)
+
+        js = m.add_job_set(range(1))
+
+        g = JobGetter()
+        m.get_job(g.callback)
+        j = g._job
+        c = j.get_call()
+
+        self.assertEqual(c, 0)
+
+        m.add_result(j, c)
+
+        g = JobGetter()
+        m.get_job(g.callback)
+
+        self.assertIsNone(g._job)
+
+        m.close()
+
+    def test_1_js_2_job(self):
+
+        m = jobs.JobManager(loop=None)
+
+        js = m.add_job_set(range(2))
+
+        g1 = JobGetter()
+        m.get_job(g1.callback)
+        j1 = g1._job
+        c1 = j1.get_call()
+
+        g2 = JobGetter()
+        m.get_job(g2.callback)
+        j2 = g2._job
+        c2 = j2.get_call()
+
+        self.assertEqual(c1, 0)
+        self.assertEqual(c2, 1)
+
+        m.add_result(j1, c1)
+        m.add_result(j2, c2)
+
+        g = JobGetter()
+        m.get_job(g.callback)
+
+        self.assertIsNone(g._job)
+
+        m.close()
+
+    def test_1_js_2_job_return_1(self):
+
+        m = jobs.JobManager(loop=None)
+
+        js = m.add_job_set(range(2))
+
+        g1 = JobGetter()
+        m.get_job(g1.callback)
+        j1 = g1._job
+        c1 = j1.get_call()
+
+        g2 = JobGetter()
+        m.get_job(g2.callback)
+        j2 = g2._job
+        c2 = j2.get_call()
+
+        self.assertEqual(c1, 0)
+        self.assertEqual(c2, 1)
+
+        m.add_result(j1, c1)
+        m.return_job(j2)
+
+        g = JobGetter()
+        m.get_job(g.callback)
+        j2 = g2._job
+        c2 = j2.get_call()
+
+        self.assertEqual(c2, 1)
+
+        m.add_result(j2, c2)
+
+        g = JobGetter()
+        m.get_job(g.callback)
+        self.assertIsNone(g._job)
+
+        m.close()
+
+    def test_2_js_1_job(self):
+
+        m = jobs.JobManager(loop=None)
+
+        js1 = m.add_job_set(range(1))
+        js2 = m.add_job_set(range(1))
+
+        g1 = JobGetter()
+        m.get_job(g1.callback)
+        j1 = g1._job
+        c1 = j1.get_call()
+
+        g2 = JobGetter()
+        m.get_job(g2.callback)
+        j2 = g2._job
+
+        self.assertEqual(c1, 0)
+        self.assertIsNone(j2)
+
+        m.add_result(j1, c1)
+
+        j2 = g2._job
+
+        self.assertIsNotNone(j2)
+
+        c2 = j2.get_call()
+        m.add_result(j2, c2)
+
+        g = JobGetter()
+        m.get_job(g.callback)
+        self.assertIsNone(g._job)
+
+        m.close()
+
+    def test_2_js_staggered_1_job(self):
+
+        m = jobs.JobManager(loop=None)
+
+        js1 = m.add_job_set(range(1))
+
+        g1 = JobGetter()
+        m.get_job(g1.callback)
+        j1 = g1._job
+        c1 = j1.get_call()
+
+        g2 = JobGetter()
+        m.get_job(g2.callback)
+        j2 = g2._job
+
+        self.assertEqual(c1, 0)
+        self.assertIsNone(j2)
+
+        m.add_result(j1, c1)
+
+        j2 = g2._job
+
+        self.assertIsNone(j2)
+
+        js2 = m.add_job_set(range(1))
+        j2 = g2._job
+
+        self.assertIsNotNone(j2)
+
+        c2 = j2.get_call()
+        m.add_result(j2, c2)
+
+        g = JobGetter()
+        m.get_job(g.callback)
+        self.assertIsNone(g._job)
+
+        m.close()
+
+
 if __name__ == "__main__":
     unittest.main()
 
