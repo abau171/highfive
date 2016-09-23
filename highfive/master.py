@@ -169,6 +169,15 @@ class Master:
         self._workers = workers
         self._loop = loop
 
+    async def __aenter__(self):
+
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+
+        self.close()
+        await self.wait_closed()
+
     def run(self, job_list):
         """
         Runs a job set which consists of the jobs in an iterable job list.

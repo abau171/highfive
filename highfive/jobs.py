@@ -178,6 +178,14 @@ class JobSetHandle:
 
         self._internal_results_iter = self._results.aiter()
 
+    async def __aenter__(self):
+
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+
+        self.cancel()
+
     def cancel(self):
         """
         Cancels the job set.
