@@ -11,18 +11,18 @@ async def main(loop):
 
     master = await highfive.start_master(loop=loop)
 
-    js1, results1 = master.run(range(5))
-    js2, results2 = master.run(range(0))
-    js3, results3 = master.run(range(5))
-    js4, results4 = master.run(range(5000))
+    js1 = master.run(range(5))
+    js2 = master.run(range(0))
+    js3 = master.run(range(5))
+    js4 = master.run(range(5000))
 
-    async for r in results1:
+    async for r in js1.results():
         print(r)
-    async for r in results2:
+    async for r in js2.results():
         print(r)
-    async for r in results3:
+    async for r in js3.results():
         print(r)
-    async for r in results4:
+    async for r in js4.results():
         print(r)
         if r == 100:
             js4.cancel()

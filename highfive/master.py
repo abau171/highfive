@@ -106,6 +106,28 @@ class Worker:
             self._job = None
 
 
+class JobSetHandle:
+
+    def __init__(self, js, results):
+
+        self._js = js
+        self._results = results
+
+        self._internal_results_iter = self._results.aiter()
+
+    def cancel(self):
+
+        self._js.cancel()
+
+    def results(self):
+
+        return self._results.aiter()
+
+    async def next_result(self):
+
+        return await self._internal_results_iter.__anext__()
+
+
 class Master:
 
     def __init__(self, server, manager, *, loop):
@@ -116,7 +138,8 @@ class Master:
 
     def run(self, job_list):
 
-        return self._manager.add_job_set(job_list)
+        js, results = self._manager.add_job_set(job_list)
+        return JobSetHandle(js, results)
 
     def close(self):
 

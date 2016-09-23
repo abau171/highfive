@@ -65,7 +65,7 @@ class Results:
 
         return self._results[i]
 
-    async def __aiter__(self):
+    def aiter(self): # not __aiter__ because we don't want an async function
 
         return ResultsIterator(self)
 
