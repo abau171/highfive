@@ -16,9 +16,10 @@ async def start_master(host="", port=48484, *, loop=None):
     loop = loop if loop is not None else asyncio.get_event_loop()
 
     manager = jobs.JobManager(loop=loop)
+    workers = set()
     server = await loop.create_server(
-            lambda: WorkerProtocol(manager), host, port)
-    return Master(server, manager, loop=loop)
+            lambda: WorkerProtocol(manager, workers), host, port)
+    return Master(server, manager, workers, loop=loop)
 
 
 class WorkerProtocol(asyncio.Protocol):
@@ -27,9 +28,10 @@ class WorkerProtocol(asyncio.Protocol):
     of input and delegates their processing to a Worker object.
     """
 
-    def __init__(self, manager):
+    def __init__(self, manager, workers):
 
         self._manager = manager
+        self._workers = workers
 
     def connection_made(self, transport):
         """
@@ -37,11 +39,16 @@ class WorkerProtocol(asyncio.Protocol):
         up the protocol object.
         """
 
+        if self._manager.is_closed():
+            logger.debug("worker tried to connect while manager was closed")
+            return
+
         logger.debug("new worker connected")
 
         self._transport = transport
         self._buffer = bytearray()
         self._worker = Worker(self._transport, self._manager)
+        self._workers.add(self._worker)
 
     def data_received(self, data):
         """
@@ -77,6 +84,7 @@ class WorkerProtocol(asyncio.Protocol):
         logger.debug("worker connection lost")
 
         self._worker.close()
+        self._workers.remove(self._worker)
 
 
 class Worker:
@@ -125,6 +133,9 @@ class Worker:
         job manager.
         """
 
+        if self._closed:
+            return
+
         assert self._job is not None
 
         logger.debug("worker {} got response".format(id(self)))
@@ -151,10 +162,11 @@ class Worker:
 
 class Master:
 
-    def __init__(self, server, manager, *, loop):
+    def __init__(self, server, manager, workers, *, loop):
 
         self._server = server
         self._manager = manager
+        self._workers = workers
         self._loop = loop
 
     def run(self, job_list):
@@ -171,6 +183,9 @@ class Master:
         """
 
         self._server.close()
+        self._manager.close()
+        for worker in self._workers:
+            worker.close()
 
     async def wait_closed(self):
         """

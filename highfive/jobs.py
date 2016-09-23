@@ -437,6 +437,13 @@ class JobManager:
                 callback = self._ready_callbacks.popleft()
                 callback(job)
 
+    def is_closed(self):
+        """
+        Returns True if the job manager is closed, and False otherwise.
+        """
+
+        return self._closed
+
     def close(self):
         """
         Closes the job manager. No more jobs will be assigned, no more job sets
