@@ -14,7 +14,6 @@ async def main(loop):
     js1 = master.run(range(5))
     js2 = master.run(range(0))
     js3 = master.run(range(5))
-    js4 = master.run(range(5000))
 
     async for r in js1.results():
         print(r)
@@ -22,6 +21,8 @@ async def main(loop):
         print(r)
     async for r in js3.results():
         print(r)
+
+    js4 = master.run(range(5000))
     async for r in js4.results():
         print(r)
         if r == 100:

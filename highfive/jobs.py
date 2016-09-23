@@ -346,6 +346,19 @@ class JobManager:
         self._js_queue = collections.deque()
         self._closed = False
 
+    def _distribute_jobs(self):
+        """
+        Distributes jobs from the active job set to any waiting get_job
+        callbacks.
+        """
+
+        while (self._active_js.job_available()
+                and len(self._ready_callbacks) > 0):
+            job = self._active_js.get_job()
+            self._job_sources[job] = self._active_js
+            callback = self._ready_callbacks.popleft()
+            callback(job)
+
     def add_job_set(self, job_list):
         """
         Adds a job set to the manager's queue. If there is no job set running,
@@ -360,6 +373,7 @@ class JobManager:
             if self._active_js is None:
                 self._active_js = js
                 logger.debug("activated job set")
+                self._distribute_jobs()
             else:
                 self._js_queue.append(js)
         else:
@@ -430,12 +444,7 @@ class JobManager:
         except IndexError:
             self._active_js = None
         else:
-            while (self._active_js.job_available()
-                    and len(self._ready_callbacks) > 0):
-                job = self._active_js.get_job()
-                self._job_sources[job] = self._active_js
-                callback = self._ready_callbacks.popleft()
-                callback(job)
+            self._distribute_jobs()
 
     def is_closed(self):
         """
