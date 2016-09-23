@@ -65,10 +65,6 @@ class Results:
 
         return self._results[i]
 
-    def aiter(self): # not __aiter__ because we don't want an async function
-
-        return ResultsIterator(self)
-
     def _change(self):
         """
         Called when a state change has occurred. Waiters are notified that a
@@ -79,6 +75,13 @@ class Results:
             if not waiter.done():
                 waiter.set_result(None)
         self._waiters = []
+
+    def aiter(self): # not __aiter__ because we don't want an async function
+        """
+        Returns an async iterator over the results.
+        """
+
+        return ResultsIterator(self)
 
     def add(self, result):
         """
@@ -123,6 +126,11 @@ class Results:
 
 
 class ResultsIterator:
+    """
+    Asynchronous iterator over a Results object. Results are found in the
+    order they are added to the results. Getting the next result may block if
+    the next result is not known.
+    """
 
     def __init__(self, results):
 
@@ -136,17 +144,63 @@ class ResultsIterator:
     async def __anext__(self):
 
         if self._i >= len(self._results):
+
+            # We are at the end of the known results. If the results list is
+            # complete, this is the hard end. Otherwise, we have to wait and
+            # see if the result list will get another result or be completed.
+
             if self._results.is_complete():
                 raise StopAsyncIteration
             else:
                 await self._results.wait_changed()
 
-        if self._i >= len(self._results):
+        # At this point, either the ith result is available or we have reached
+        # the end of the result list.
+
+        if self._results.is_complete():
             raise StopAsyncIteration
         else:
             result = self._results[self._i]
             self._i += 1
             return result
+
+
+class JobSetHandle:
+    """
+    A user-friendly object tied to a single job set. It is used to easily
+    access job results or cancel the job set.
+    """
+
+    def __init__(self, js, results):
+
+        self._js = js
+        self._results = results
+
+        self._internal_results_iter = self._results.aiter()
+
+    def cancel(self):
+        """
+        Cancels the job set.
+        """
+
+        self._js.cancel()
+
+    def results(self):
+        """
+        Returns an asynchronous iterator over the all of the job set's results.
+        """
+
+        return self._results.aiter()
+
+    async def next_result(self):
+        """
+        Gets the next result in the job set. An internal result iterator is
+        used so multiple calls to next_result() will return subsequent results.
+        Calling results() after one or more calls to next_result() will still
+        return an iterator over all results, not all remaining results.
+        """
+
+        return await self._internal_results_iter.__anext__()
 
 
 class JobSet:
@@ -293,6 +347,10 @@ class JobManager:
         self._closed = False
 
     def add_job_set(self, job_list):
+        """
+        Adds a job set to the manager's queue. If there is no job set running,
+        it is activated immediately. A new job set handle is returned.
+        """
 
         assert not self._closed
 
@@ -306,16 +364,12 @@ class JobManager:
                 self._js_queue.append(js)
         else:
             logger.debug("new job set has no jobs")
-        return js, results
-
-    def job_available(self):
-
-        if self._closed or self._active_js is None:
-            return False
-        else:
-            return self._active_js.job_available()
+        return JobSetHandle(js, results)
 
     def get_job(self, callback):
+        """
+        Calls the given callback function when a job becomes available.
+        """
 
         assert not self._closed
 
@@ -327,6 +381,9 @@ class JobManager:
             callback(job)
 
     def return_job(self, job):
+        """
+        Returns a job to its source job set to be run again later.
+        """
 
         if self._closed:
             return
@@ -340,6 +397,10 @@ class JobManager:
             js.return_job(job)
 
     def add_result(self, job, result):
+        """
+        Adds the result of a job to the results list of the job's source job
+        set.
+        """
 
         if self._closed:
             return
@@ -349,6 +410,11 @@ class JobManager:
         js.add_result(result)
 
     def job_set_done(self, js):
+        """
+        Called when a job set has been completed or cancelled. If the job set
+        was active, the next incomplete job set is loaded from the job set
+        queue and is activated.
+        """
 
         if self._closed:
             return
@@ -372,6 +438,10 @@ class JobManager:
                 callback(job)
 
     def close(self):
+        """
+        Closes the job manager. No more jobs will be assigned, no more job sets
+        will be added, and any queued or active job sets will be cancelled.
+        """
 
         if self._closed:
             return

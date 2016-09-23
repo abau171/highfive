@@ -9,6 +9,9 @@ logger = logging.getLogger(__name__)
 
 
 async def start_master(host="", port=48484, *, loop=None):
+    """
+    Starts a new HighFive master at the given host and port, and returns it.
+    """
 
     loop = loop if loop is not None else asyncio.get_event_loop()
 
@@ -19,12 +22,20 @@ async def start_master(host="", port=48484, *, loop=None):
 
 
 class WorkerProtocol(asyncio.Protocol):
+    """
+    The asyncio protocol used to handle remote workers. This class finds lines
+    of input and delegates their processing to a Worker object.
+    """
 
     def __init__(self, manager):
 
         self._manager = manager
 
     def connection_made(self, transport):
+        """
+        Called when a remote worker connection has been found. Finishes setting
+        up the protocol object.
+        """
 
         logger.debug("new worker connected")
 
@@ -33,6 +44,11 @@ class WorkerProtocol(asyncio.Protocol):
         self._worker = Worker(self._transport, self._manager)
 
     def data_received(self, data):
+        """
+        Called when a chunk of data is received from the remote worker. These
+        chunks are stored in a buffer. When a complete line is found in the
+        buffer, it removed and sent to line_received().
+        """
 
         self._buffer.extend(data)
         while True:
@@ -44,11 +60,19 @@ class WorkerProtocol(asyncio.Protocol):
             self.line_received(line)
 
     def line_received(self, line):
+        """
+        Called when a complete line is found from the remote worker. Decodes
+        a response object from the line, then passes it to the worker object.
+        """
 
         response = json.loads(line.decode("utf-8"))
         self._worker.response_received(response)
 
     def connection_lost(self, exc):
+        """
+        Called when the connection to the remote worker is broken. Closes the
+        worker.
+        """
 
         logger.debug("worker connection lost")
 
@@ -56,6 +80,9 @@ class WorkerProtocol(asyncio.Protocol):
 
 
 class Worker:
+    """
+    Handles job retrieval and result reporting for remote workers.
+    """
 
     def __init__(self, transport, manager):
 
@@ -67,11 +94,18 @@ class Worker:
         self._load_job()
 
     def _load_job(self):
+        """
+        Initiates a job load from the job manager.
+        """
 
         self._job = None
         self._manager.get_job(self._job_loaded)
 
     def _job_loaded(self, job):
+        """
+        Called when a job has been found for the worker to run. Sends the job's
+        RPC to the remote worker.
+        """
 
         logger.debug("worker {} found a job".format(id(self)))
 
@@ -85,6 +119,11 @@ class Worker:
         self._transport.write(call)
 
     def response_received(self, response):
+        """
+        Called when a response to a job RPC has been received. Decodes the
+        response and finalizes the result, then reports the result to the
+        job manager.
+        """
 
         assert self._job is not None
 
@@ -95,6 +134,10 @@ class Worker:
         self._load_job()
 
     def close(self):
+        """
+        Closes the worker. No more jobs will be handled by the worker, and any
+        running job is immediately returned to the job manager.
+        """
 
         if self._closed:
             return
@@ -106,28 +149,6 @@ class Worker:
             self._job = None
 
 
-class JobSetHandle:
-
-    def __init__(self, js, results):
-
-        self._js = js
-        self._results = results
-
-        self._internal_results_iter = self._results.aiter()
-
-    def cancel(self):
-
-        self._js.cancel()
-
-    def results(self):
-
-        return self._results.aiter()
-
-    async def next_result(self):
-
-        return await self._internal_results_iter.__anext__()
-
-
 class Master:
 
     def __init__(self, server, manager, *, loop):
@@ -137,15 +158,24 @@ class Master:
         self._loop = loop
 
     def run(self, job_list):
+        """
+        Runs a job set which consists of the jobs in an iterable job list.
+        """
 
-        js, results = self._manager.add_job_set(job_list)
-        return JobSetHandle(js, results)
+        return self._manager.add_job_set(job_list)
 
     def close(self):
+        """
+        Starts closing the HighFive master. The server will be closed and
+        all queued job sets will be cancelled.
+        """
 
         self._server.close()
 
     async def wait_closed(self):
+        """
+        Waits until the HighFive master closes completely.
+        """
 
         await self._server.wait_closed()
 
