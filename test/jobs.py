@@ -4,388 +4,216 @@ import unittest
 import highfive.jobs as jobs
 
 
+class TestDefaultJob(unittest.TestCase):
+
+    def test_get(self):
+
+        call = object()
+        job = jobs.DefaultJob(call)
+
+        got_call = job.get_call()
+        self.assertIs(got_call, call)
+
+    def test_result(self):
+
+        job = jobs.DefaultJob(object())
+
+        response = object()
+        result = job.get_result(response)
+        self.assertIs(result, response)
+
+
 class TestResults(unittest.TestCase):
 
-    def setUp(self):
+    def test_empty(self):
 
-        self._loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(None)
+        results = jobs.Results(loop=None)
 
-    def test_no_results(self):
-        """
-        Ensures that a new result set has no results and is incomplete, then
-        ensures that completion of an empty result set works.
-        """
+        self.assertEqual(len(results), 0)
+        self.assertFalse(results.is_complete())
 
-        rs = jobs.Results(loop=self._loop)
+    def test_3_results(self):
 
-        self.assertEqual(len(rs), 0)
-        self.assertFalse(rs.is_complete())
-        
-        rs.complete()
+        results = jobs.Results(loop=None)
 
-        self.assertEqual(len(rs), 0)
-        self.assertTrue(rs.is_complete())
+        for i in range(3):
+            results.add(i)
 
-        self._loop.close()
+        self.assertEqual(len(results), 3)
+        for i in range(3):
+            self.assertEqual(results[i], i)
 
-    def test_results(self):
-        """
-        Ensures that a result set can add results, and effectively tracks and
-        returns them before a proper result set completion.
-        """
+    def test_complete(self):
 
-        rs = jobs.Results(loop=self._loop)
+        results = jobs.Results(loop=None)
 
-        rs.add(0)
+        for i in range(3):
+            results.add(i)
 
-        self.assertEqual(len(rs), 1)
-        self.assertFalse(rs.is_complete())
+        self.assertFalse(results.is_complete())
 
-        rs.add(1)
-        rs.add(2)
+        results.complete()
 
-        self.assertEqual(len(rs), 3)
-        self.assertFalse(rs.is_complete())
-
-        self.assertEqual(rs[0], 0)
-        self.assertEqual(rs[1], 1)
-        self.assertEqual(rs[2], 2)
-
-        rs.complete()
-
-        self.assertEqual(len(rs), 3)
-        self.assertTrue(rs.is_complete())
-
-        self._loop.close()
-
-    def test_ops_after_complete(self):
-        """
-        Completes a result set, then makes sure new results cannot be added
-        and it cannot be completed again.
-        """
-
-        rs = jobs.Results(loop=self._loop)
-
-        rs.complete()
-
-        with self.assertRaises(AssertionError):
-            rs.add(0)
-
-        self._loop.close()
-
-    def test_bad_index(self):
-        """
-        Ensures that fetching a result using an improper index fails.
-        """
-
-        rs = jobs.Results(loop=self._loop)
-
-        rs.add(0)
-        rs.add(1)
-
-        with self.assertRaises(IndexError):
-            rs[2]
-        with self.assertRaises(IndexError):
-            rs[3]
-        with self.assertRaises(IndexError):
-            rs[10]
-
-        self._loop.close()
-
-    def test_wait_complete(self):
-        """
-        Ensures that the completion of a result set invokes a change, and that
-        all future attempts to wait for a change return immediately.
-        """
-
-        rs = jobs.Results(loop=self._loop)
-
-        async def completer():
-            rs.complete()
-
-        async def waiter():
-            c = self._loop.create_task(completer())
-            await rs.wait_changed()
-            self.assertTrue(rs.is_complete())
-            await rs.wait_changed()
-
-        self._loop.run_until_complete(waiter())
-
-        self._loop.close()
-
-    def test_wait_result_add(self):
-        """
-        Ensures that adding a result invokes a change.
-        """
-
-        rs = jobs.Results(loop=self._loop)
-
-        async def adder():
-            rs.add(None)
-
-        async def waiter():
-            c = self._loop.create_task(adder())
-            await rs.wait_changed()
-            self.assertEqual(len(rs), 1)
-            self.assertFalse(rs.is_complete())
-
-        self._loop.run_until_complete(waiter())
-
-        self._loop.close()
+        self.assertTrue(results.is_complete())
 
 
-class TestResultsIterator(unittest.TestCase):
+class MockResults:
 
-    def setUp(self):
+    def __init__(self):
 
-        self._loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(None)
+        self._results = []
+        self._complete = False
 
-    def test_no_results(self):
-        """
-        Ensures that a completed result set with no results immediately
-        indicates the end of results when waited on.
-        """
+    def add(self, result):
 
-        rs = jobs.Results(loop=self._loop)
-        rs.complete()
+        assert not self._complete
+        self._results.append(result)
 
-        ri = jobs.ResultsIterator(rs)
+    def complete(self):
 
-        async def nexter():
-            with self.assertRaises(StopAsyncIteration):
-                await ri.__anext__()
-
-        self._loop.run_until_complete(nexter())
-
-        self._loop.close()
-
-    def test_some_results(self):
-        """
-        Ensures that results can be iterated over asynchronously whether
-        results are currently available or not.
-        """
-
-        rs = jobs.Results(loop=self._loop)
-        rs.add(0)
-
-        ri = jobs.ResultsIterator(rs)
-
-        async def add_completer():
-            rs.add(1)
-            rs.complete()
-
-        async def nexter():
-            await ri.__anext__()
-            self._loop.create_task(add_completer())
-            await ri.__anext__()
-            with self.assertRaises(StopAsyncIteration):
-                await ri.__anext__()
-
-        self._loop.run_until_complete(nexter())
-
-        self._loop.close()
+        assert not self._complete
+        self._complete = True
 
 
-async def acount(aiterator):
+class MockManager:
 
-    c = 0
-    async for _ in aiterator:
-        c += 1
-    return c
+    def __init__(self):
+
+        self._done = set()
+
+    def job_set_done(self, js):
+
+        self._done.add(js)
 
 
 class TestJobSet(unittest.TestCase):
 
-    def setUp(self):
+    def test_empty(self):
 
-        self._loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(None)
+        r = MockResults()
+        m = MockManager()
+        js = jobs.JobSet(range(0), r, m, loop=None)
 
-    def test_no_jobs(self):
-        """
-        Ensure that a job set initialized with an empty job iterable is
-        treated as a fully finished job set.
-        """
-
-        results = jobs.Results(loop=self._loop)
-        js = jobs.JobSet(range(0), results, loop=self._loop)
-
+        self.assertFalse(js.job_available())
         self.assertTrue(js.is_done())
-        self.assertFalse(js.job_available())
-        with self.assertRaises(IndexError):
-            js.get_job()
-        self.assertEqual(self._loop.run_until_complete(acount(results)), 0)
+        self.assertIn(js, m._done)
 
-        self._loop.close()
+    def test_normal(self):
 
-    def test_one_job(self):
-        """
-        Runs through the normal execution of a job set with a single job. The
-        job set is created, a job is fetched, then a result is added. This
-        leaves the job set in a finished state.
-        """
+        r = MockResults()
+        m = MockManager()
+        js = jobs.JobSet(range(2), r, m, loop=None)
 
-        results = jobs.Results(loop=self._loop)
-        js = jobs.JobSet(range(1), results, loop=self._loop)
-
-        self.assertFalse(js.is_done())
         self.assertTrue(js.job_available())
-
-        job = js.get_job()
-
         self.assertFalse(js.is_done())
+
+        j = js.get_job()
+        js.add_result(j)
+
+        self.assertTrue(js.job_available())
+        self.assertFalse(js.is_done())
+        self.assertEqual(len(r._results), 1)
+        self.assertFalse(r._complete)
+
+        j = js.get_job()
+
         self.assertFalse(js.job_available())
+        self.assertFalse(js.is_done())
 
-        js.add_result(None)
+        js.add_result(j)
 
+        self.assertFalse(js.job_available())
         self.assertTrue(js.is_done())
-        self.assertFalse(js.job_available())
-        self.assertEqual(self._loop.run_until_complete(acount(results)), 1)
+        self.assertEqual(len(r._results), 2)
+        self.assertTrue(r._complete)
 
-        self._loop.close()
+    def test_return(self):
 
-    def test_one_job_return(self):
-        """
-        Runs through the normal execution of a job set with a single job,
-        except the first job run fails and the job is returned to the queue.
-        The job set is created, a job is fetched, then the job is returned to
-        the queue. The job is then fetched again, then a result is added. This
-        leaves the job set in a finished state.
-        """
+        r = MockResults()
+        m = MockManager()
+        js = jobs.JobSet(range(1), r, m, loop=None)
 
-        results = jobs.Results(loop=self._loop)
-        js = jobs.JobSet(range(1), results, loop=self._loop)
-
-        job = js.get_job()
-        js.return_job(job)
-
-        self.assertFalse(js.is_done())
         self.assertTrue(js.job_available())
-
-        job = js.get_job()
-
         self.assertFalse(js.is_done())
+
+        j = js.get_job()
+
         self.assertFalse(js.job_available())
+        self.assertFalse(js.is_done())
 
-        js.add_result(None)
+        js.return_job(j)
 
+        self.assertTrue(js.job_available())
+        self.assertFalse(js.is_done())
+
+        j = js.get_job()
+
+        self.assertFalse(js.job_available())
+        self.assertFalse(js.is_done())
+
+        js.add_result(j)
+
+        self.assertFalse(js.job_available())
         self.assertTrue(js.is_done())
-        self.assertFalse(js.job_available())
-        self.assertEqual(self._loop.run_until_complete(acount(results)), 1)
 
-        self._loop.close()
+    def test_take_2_return_first(self):
 
-    def test_many_jobs_mixed(self):
-        """
-        Creates several jobs and runs them through several different means of
-        execution concurrently.
-        """
+        r = MockResults()
+        m = MockManager()
+        js = jobs.JobSet(range(2), r, m, loop=None)
 
-        results = jobs.Results(loop=self._loop)
-        js = jobs.JobSet(range(3), results, loop=self._loop)
-
-        self.assertFalse(js.is_done())
         self.assertTrue(js.job_available())
-
-        job1 = js.get_job()
-
         self.assertFalse(js.is_done())
+
+        j1 = js.get_job()
+        j2 = js.get_job()
+
+        self.assertFalse(js.job_available())
+        self.assertFalse(js.is_done())
+
+        js.return_job(j1)
+        js.add_result(j2)
+
         self.assertTrue(js.job_available())
-
-        job2 = js.get_job()
-        job3 = js.get_job()
-
         self.assertFalse(js.is_done())
+
+        j1 = js.get_job()
+
         self.assertFalse(js.job_available())
-
-        js.add_result(None)
-
         self.assertFalse(js.is_done())
+
+        js.add_result(j1)
+
         self.assertFalse(js.job_available())
-
-        js.return_job(job2)
-
-        self.assertFalse(js.is_done())
-        self.assertTrue(js.job_available())
-
-        js.add_result(None)
-        job4 = js.get_job()
-
-        self.assertFalse(js.is_done())
-        self.assertFalse(js.job_available())
-
-        js.add_result(None)
-
         self.assertTrue(js.is_done())
-        self.assertFalse(js.job_available())
-        self.assertEqual(self._loop.run_until_complete(acount(results)), 3)
-
-        self._loop.close()
-
-    def test_done_means_done(self):
-        """
-        Ensures that when a job set is done, jobs cannot be returned, results
-        cannot be added, and the job can no longer be cancelled.
-        """
-
-        results = jobs.Results(loop=self._loop)
-        js = jobs.JobSet(range(0), results, loop=self._loop)
-
-        js.return_job(None)
-        self.assertFalse(js.job_available())
-
-        js.add_result(None)
-        self.assertEqual(self._loop.run_until_complete(acount(results)), 0)
-
-        self._loop.close()
 
     def test_cancel(self):
-        """
-        Ensures that cancelling a job set instantly finishes it, allowing no
-        more jobs to be retrieved.
-        """
 
-        results = jobs.Results(loop=self._loop)
-        js = jobs.JobSet(range(3), results, loop=self._loop)
+        r = MockResults()
+        m = MockManager()
+        js = jobs.JobSet(range(5), r, m, loop=None)
 
-        job1 = js.get_job()
-        job2 = js.get_job()
-        js.return_job(job1)
+        j1 = js.get_job()
+        j2 = js.get_job()
+        j3 = js.get_job()
+        j4 = js.get_job()
 
-        self.assertFalse(js.is_done())
+        js.add_result(j1)
+        js.return_job(j2)
+
         self.assertTrue(js.job_available())
+        self.assertFalse(js.is_done())
 
         js.cancel()
 
-        self.assertTrue(js.is_done())
         self.assertFalse(js.job_available())
+        self.assertTrue(js.is_done())
 
-        self._loop.close()
+        js.add_result(j3)
+        js.return_job(j4)
 
-    def test_wait_done(self):
-        """
-        Ensures that waiting on the completion of a job set works whether the
-        job set is running or already complete.
-        """
-
-        results = jobs.Results(loop=self._loop)
-        js = jobs.JobSet(range(1), results, loop=self._loop)
-
-        async def completer():
-            job = js.get_job()
-            js.add_result(None)
-
-        async def waiter():
-            c = self._loop.create_task(completer())
-            await js.wait_done()
-            self.assertTrue(js.is_done())
-            await js.wait_done()
-
-        self._loop.run_until_complete(waiter())
-
-        self._loop.close()
+        self.assertFalse(js.job_available())
+        self.assertTrue(js.is_done())
 
 
 if __name__ == "__main__":
