@@ -1,5 +1,9 @@
 import asyncio
 import collections
+import logging
+
+
+logger = logging.getLogger(__name__)
 
 
 class Job:
@@ -152,15 +156,15 @@ class JobSet:
     manager.
     """
 
-    def __init__(self, jobs, results, *, loop):
+    def __init__(self, jobs, results, manager, *, loop):
         self._loop = loop
         self._jobs = iter(jobs)
         self._return_queue = collections.deque()
         self._active_jobs = 0
         self._results = results
+        self._manager = manager
 
         self._waiters = []
-        self._done_callback = None
 
         self._load_job()
 
@@ -192,8 +196,7 @@ class JobSet:
         waiters = self._waiters
         for waiter in waiters:
             waiter.set_result(None)
-        if self._done_callback is not None:
-            self._done_callback()
+        self._manager.job_set_done(self)
 
     def job_available(self):
         """
@@ -277,9 +280,6 @@ class JobSet:
             self._waiters.append(future)
             await future
 
-    def set_done_callback(self, callback):
-
-        self._done_callback = callback
 
 class JobManager:
 
@@ -297,12 +297,15 @@ class JobManager:
         assert not self._closed
 
         results = Results(loop=self._loop)
-        js = JobSet(job_list, results, loop=self._loop)
-        if self._active_js is None:
-            self._active_js = js
-            self._active_js.set_done_callback(self.active_job_set_done)
+        js = JobSet(job_list, results, self, loop=self._loop)
+        if not js.is_done():
+            if self._active_js is None:
+                self._active_js = js
+                logger.debug("activated job set")
+            else:
+                self._js_queue.append(js)
         else:
-            self._js_queue.append(js)
+            logger.debug("new job set has no jobs")
         return js, results
 
     def job_available(self):
@@ -345,19 +348,22 @@ class JobManager:
         del self._job_sources[job]
         js.add_result(result)
 
-    def active_job_set_done(self):
-
-        assert self._active_js.is_done()
+    def job_set_done(self, js):
 
         if self._closed:
             return
 
+        if self._active_js != js:
+            return
+
         try:
-            self._active_js = self._js_queue.popleft()
+            while self._active_js.is_done():
+                logger.debug("job set done")
+                self._active_js = self._js_queue.popleft()
+                logger.debug("activated job set")
         except IndexError:
             self._active_js = None
         else:
-            self._active_js.set_done_callback(self.active_job_set_done)
             while (self._active_js.job_available()
                     and len(self._ready_callbacks) > 0):
                 job = self._active_js.get_job()

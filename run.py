@@ -9,7 +9,11 @@ logging.basicConfig(level=logging.DEBUG)
 
 loop = asyncio.get_event_loop()
 master = loop.run_until_complete(highfive.start_master())
+master.run(range(0))
 master.run(range(5))
+master.run(range(0))
+master.run(range(5))
+master.run(range(1))
 master.run(range(5))
 
 try:
