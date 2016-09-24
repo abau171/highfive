@@ -169,6 +169,8 @@ class Master:
         self._workers = workers
         self._loop = loop
 
+        self._closed = False
+
     async def __aenter__(self):
 
         return self
@@ -183,6 +185,9 @@ class Master:
         Runs a job set which consists of the jobs in an iterable job list.
         """
 
+        if self._closed:
+            raise RuntimeError("master is closed")
+
         return self._manager.add_job_set(job_list)
 
     def close(self):
@@ -190,6 +195,11 @@ class Master:
         Starts closing the HighFive master. The server will be closed and
         all queued job sets will be cancelled.
         """
+
+        if self._closed:
+            return
+
+        self._closed = True
 
         self._server.close()
         self._manager.close()
