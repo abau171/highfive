@@ -31,5 +31,5 @@ def delayed_sum(numbers):
 # we can limit this with `max_workers=<number of workers>`.
 if __name__ == "__main__":
 
-    highfive.run_worker_pool(delayed_sum, max_workers=10)
+    highfive.run_worker_pool(delayed_sum)
 
