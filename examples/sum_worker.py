@@ -31,5 +31,8 @@ def delayed_sum(numbers):
 # we can limit this with `max_workers=<number of workers>`.
 if __name__ == "__main__":
 
-    highfive.run_worker_pool(delayed_sum)
+    try:
+        highfive.run_worker_pool(delayed_sum)
+    except KeyboardInterrupt:
+        print("keyboard interrupt")
 

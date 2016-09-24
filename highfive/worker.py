@@ -21,7 +21,7 @@ async def handle_jobs(job_handler, host, port, *, loop):
 
             try:
                 call_encoded = await reader.readuntil(b"\n")
-            except asyncio.IncompleteReadError:
+            except (asyncio.IncompleteReadError, ConnectionResetError):
                 break
             logging.debug("worker got call")
             call_json = call_encoded.decode("utf-8")
