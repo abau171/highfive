@@ -323,6 +323,9 @@ class JobSet:
         queued jobs are discarded.
         """
 
+        if self._active_jobs == 0:
+            return
+
         self._jobs = iter(())
         self._on_deck = None
         self._return_queue.clear()
