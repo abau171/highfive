@@ -8,6 +8,10 @@ logger = logging.getLogger(__name__)
 
 
 async def handle_jobs(job_handler, host, port, *, loop):
+    """
+    Connects to the remote master and continuously receives calls, executes
+    them, then returns a response until interrupted.
+    """
 
     try:
 
@@ -40,6 +44,9 @@ async def handle_jobs(job_handler, host, port, *, loop):
 
 
 def worker_main(job_handler, host, port):
+    """
+    Starts an asyncio event loop to connect to the master and run jobs.
+    """
 
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(None)
@@ -49,6 +56,10 @@ def worker_main(job_handler, host, port):
 
 def run_worker_pool(job_handler, host="localhost", port=48484,
                       *, max_workers=None):
+    """
+    Runs a pool of workers which connect to a remote HighFive master and begin
+    executing calls.
+    """
 
     if max_workers is None:
         max_workers = multiprocessing.cpu_count()
